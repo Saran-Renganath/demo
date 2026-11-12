@@ -51,6 +51,8 @@ button,input,select{font:inherit;color:inherit}
 .btn:hover{border-color:var(--accent)}
 .btn.primary{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
 .btn.sm{padding:4px 10px;font-size:13px}
+.btn:disabled{opacity:.55;cursor:default}
+.btn:disabled:hover{border-color:var(--line)}
 .top-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
 .kpi{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
@@ -392,7 +394,8 @@ input.pct{width:64px;text-align:right}
   var PS=ProcStore("switch",DEF);
   (function(){var s=sanProc(PS.load());PLAN=s.plan;TH=s.th})();
   function procChanged(){PS.save(procNow());render()}
-  function procReset(){var s=sanProc(PS.reset());PLAN=s.plan;TH=s.th;mapSel=null;render()}
+  var justReset=false;
+  function procReset(){var s=sanProc(PS.reset());PLAN=s.plan;TH=s.th;justReset=true;render();justReset=false;setTimeout(function(){render()},1600)}
   var cfg={co:"",to:"",cw:"customers",c:"#0B7A5B",view:false};
   try{
     var q=new URLSearchParams(location.search);
@@ -431,6 +434,7 @@ input.pct{width:64px;text-align:right}
       load:function(){try{var s=localStorage.getItem(K);if(s)return JSON.parse(s)}catch(e){}return JSON.parse(base)},
       save:function(o){try{localStorage.setItem(K,JSON.stringify(o))}catch(e){}},
       reset:function(){try{localStorage.removeItem(K)}catch(e){}return JSON.parse(base)},
+      isBase:function(o){return JSON.stringify(o)===base},
       param:function(o){var s=JSON.stringify(o);if(s===def)return"";try{return btoa(unescape(encodeURIComponent(s)))}catch(e){return""}}
     };
   }
@@ -802,7 +806,10 @@ input.pct{width:64px;text-align:right}
   }
 
   function inspHead(title,resetFn){
-    var b=h("button","btn sm","Reset the process");b.type="button";b.addEventListener("click",resetFn);
+    var atBase=PS.isBase(procNow());
+    var b=h("button","btn sm",justReset?"Reset done":(atBase?"No changes to reset":"Reset the process"));b.type="button";b.disabled=atBase;
+    b.title=atBase?"Edit a step, gate or rule first. This puts everything back the way it started.":"Put everything back the way it started";
+    b.addEventListener("click",resetFn);
     return add(h("div","row-between"),h("h3",null,title),b);
   }
 

@@ -51,6 +51,8 @@ button,input,select{font:inherit;color:inherit}
 .btn:hover{border-color:var(--accent)}
 .btn.primary{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
 .btn.sm{padding:4px 10px;font-size:13px}
+.btn:disabled{opacity:.55;cursor:default}
+.btn:disabled:hover{border-color:var(--line)}
 .top-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
 .kpi{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
@@ -243,6 +245,11 @@ input.pct{width:64px;text-align:right}
 .pm-dot{fill:var(--surface);stroke:var(--accent);stroke-width:2}
 @media (prefers-reduced-motion:reduce){.pm-wire{animation:none;stroke-dasharray:none}}
 @media (max-width:640px){.pm-grid{grid-template-columns:1fr;gap:16px}}
+
+.len-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.len-field{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px}
+.len-field input{width:70px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;color:var(--ink);font-variant-numeric:tabular-nums}
+.btn.sm.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--surface))}
 </style>
 </head>
 <body>
@@ -366,7 +373,8 @@ input.pct{width:64px;text-align:right}
   var PS=ProcStore("launch",DEF);
   (function(){var s=sanProc(PS.load());TASKS=s.tasks;TH=s.th})();
   function procChanged(){PS.save(procNow());render()}
-  function procReset(){var s=sanProc(PS.reset());TASKS=s.tasks;TH=s.th;mapSel=null;render()}
+  var justReset=false;
+  function procReset(){var s=sanProc(PS.reset());TASKS=s.tasks;TH=s.th;justReset=true;render();justReset=false;setTimeout(function(){render()},1600)}
   var cfg={co:"",to:"",cw:"properties",c:"#0B7A5B",view:false};
   try{
     var q=new URLSearchParams(location.search);
@@ -405,6 +413,7 @@ input.pct{width:64px;text-align:right}
       load:function(){try{var s=localStorage.getItem(K);if(s)return JSON.parse(s)}catch(e){}return JSON.parse(base)},
       save:function(o){try{localStorage.setItem(K,JSON.stringify(o))}catch(e){}},
       reset:function(){try{localStorage.removeItem(K)}catch(e){}return JSON.parse(base)},
+      isBase:function(o){return JSON.stringify(o)===base},
       param:function(o){var s=JSON.stringify(o);if(s===def)return"";try{return btoa(unescape(encodeURIComponent(s)))}catch(e){return""}}
     };
   }
@@ -763,7 +772,10 @@ input.pct{width:64px;text-align:right}
   }
 
   function inspHead(title,resetFn){
-    var b=h("button","btn sm","Reset the process");b.type="button";b.addEventListener("click",resetFn);
+    var atBase=PS.isBase(procNow());
+    var b=h("button","btn sm",justReset?"Reset done":(atBase?"No changes to reset":"Reset the process"));b.type="button";b.disabled=atBase;
+    b.title=atBase?"Edit a step, gate or rule first. This puts everything back the way it started.":"Put everything back the way it started";
+    b.addEventListener("click",resetFn);
     return add(h("div","row-between"),h("h3",null,title),b);
   }
 
@@ -794,10 +806,30 @@ input.pct{width:64px;text-align:right}
       var firstLate=sorted.filter(function(t){return !p.done[t.id]&&t.day<p.day})[0],firstOpen=sorted.filter(function(t){return !p.done[t.id]})[0];
       mapSel=firstLate?"t_"+firstLate.id:(firstOpen?"t_"+firstOpen.id:"out");
     }
+    box.appendChild(lengthBar());
     box.appendChild(h("p","hint","Each card is a day of the launch, and the gates sit on the right. Pick a step to see which gate it unlocks, a gate to see every step behind it, or the go-live call to see what is holding it. Edit whatever you pick underneath."));
     var holder=h("div");box.appendChild(holder);
     brainDraw=PMap(holder,model,mapSel,function(id){mapSel=id;renderDetail()});
     box.appendChild(inspect(p,g));
+  }
+  function setLength(n){
+    n=clampN(n,1,60);var old=LEN();if(n===old||!TASKS.length)return;
+    TASKS.forEach(function(x){x.day=Math.max(1,Math.min(n,Math.round(x.day*n/old)))});
+    procChanged();
+  }
+  function lengthBar(){
+    var bar=h("div","len-bar"),lab=h("label","len-field");lab.htmlFor="lenIn";
+    lab.appendChild(h("span",null,"Onboarding length"));
+    var i=h("input");i.type="number";i.id="lenIn";i.min=1;i.max=60;i.value=LEN();
+    i.addEventListener("change",function(){setLength(i.value)});
+    lab.appendChild(i);lab.appendChild(h("span",null,"days"));
+    bar.appendChild(lab);
+    [7,14,21,30].forEach(function(d){
+      var b=h("button","btn sm"+(d===LEN()?" on":""),d+" days");b.type="button";
+      b.addEventListener("click",function(){setLength(d)});bar.appendChild(b);
+    });
+    bar.appendChild(h("span","muted small","Every step moves in proportion. Fine-tune any step by picking it."));
+    return bar;
   }
   function addStep(day){
     var id="x"+Date.now().toString(36);
@@ -831,7 +863,7 @@ input.pct{width:64px;text-align:right}
       box.appendChild(inspHead("Day "+d,procReset));
       var ab=h("button","btn sm","Add a step on day "+d);ab.type="button";ab.addEventListener("click",function(){addStep(d)});
       box.appendChild(add(h("div","insp-bar"),ab));
-      box.appendChild(h("p","muted small","Move a step to another day by picking the step and changing its day. The plan gets longer or shorter to fit."));
+      box.appendChild(h("p","muted small","Move a step to another day by picking the step and changing its day, or change the onboarding length above to stretch the whole plan."));
     }else if(id==="c"){
       box.appendChild(inspHead(p.n,procReset));
       box.appendChild(h("p","muted small","The process is shared by every property. Progress, documents and training are tracked per property."));
@@ -842,6 +874,7 @@ input.pct{width:64px;text-align:right}
     return box;
   }
   function renderPlan(p,box){
+    box.appendChild(lengthBar());
     box.appendChild(h("p","hint","Tick a task to mark it done. Overdue tasks push the projected go-live day, and the gate tab follows."));
     var wrap=h("div");
     for(var d=1;d<=LEN();d++){(function(d){
