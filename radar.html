@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bill-shock radar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: summary strip on top, ranked account table on the left, the play for the selected account pinned on the right. */
+:root{
+  --bg:#F3F5F2; --surface:#FFFFFF; --ink:#14201B; --muted:#5A6962; --line:#DAE1DC;
+  --accent:#0B7A5B; --on-accent:#FFFFFF;
+  --crit:#B83227; --crit-bg:#FBE9E6; --warn:#946200; --warn-bg:#FBF1D9; --ok:#2B7548; --ok-bg:#E4F3E9;
+  --display:"Bricolage Grotesque","Trebuchet MS",sans-serif;
+  --body:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0F1513; --surface:#171F1C; --ink:#E7EDE9; --muted:#96A59D; --line:#28332E;
+    --crit:#F0857B; --crit-bg:#3A1C19; --warn:#E6B45A; --warn-bg:#352A12; --ok:#7CCB98; --ok-bg:#16301F;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0F1513; --surface:#171F1C; --ink:#E7EDE9; --muted:#96A59D; --line:#28332E;
+  --crit:#F0857B; --crit-bg:#3A1C19; --warn:#E6B45A; --warn-bg:#352A12; --ok:#7CCB98; --ok-bg:#16301F;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5}
+.wrap{max-width:1240px;margin:0 auto;padding:24px 20px 48px;display:flex;flex-direction:column;gap:20px}
+h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance}
+h1{font-size:34px;line-height:1.1;font-weight:700}
+h2{font-size:19px;font-weight:700}
+h3{font-size:15px;font-weight:700}
+p{margin:0}
+.num{font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+button,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.top{display:flex;flex-wrap:wrap;gap:16px;justify-content:space-between;align-items:flex-start}
+.top .lede{max-width:66ch;color:var(--muted);margin-top:8px}
+.eyebrow{font-size:12.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin-bottom:6px}
+.tag{display:inline-block;font-size:12px;font-weight:600;border:1px solid var(--line);border-radius:999px;padding:3px 10px;color:var(--muted);background:var(--surface)}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.top-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.kpi .v{font-family:var(--display);font-size:30px;font-weight:700;line-height:1.1}
+.kpi .l{font-size:13px;color:var(--muted);margin-top:4px}
+.kpi.alert{border-left:4px solid var(--crit)}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px}
+.rates{display:flex;flex-direction:column;gap:12px}
+.rates-head{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:baseline}
+.rate-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:10px}
+.field{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--muted)}
+.field input{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:7px 9px;color:var(--ink);width:100%;font-variant-numeric:tabular-nums}
+
+.main{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:16px;align-items:start}
+.table-head{display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center;margin-bottom:12px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:transparent;border-radius:999px;padding:4px 12px;cursor:pointer;font-size:13px;font-weight:600;color:var(--muted)}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:620px}
+th{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:10px;border-bottom:1px solid var(--line);vertical-align:middle}
+th.r,td.r{text-align:right}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:color-mix(in srgb,var(--accent) 7%,transparent)}
+tbody tr[aria-selected="true"]{background:color-mix(in srgb,var(--accent) 13%,transparent)}
+.acct{font-weight:600}
+.acct small{display:block;font-weight:400;color:var(--muted);font-size:12.5px}
+.pill{display:inline-block;font-size:12px;font-weight:600;border-radius:999px;padding:2px 10px;white-space:nowrap}
+.pill.high{background:var(--crit-bg);color:var(--crit)}
+.pill.medium{background:var(--warn-bg);color:var(--warn)}
+.pill.low{background:var(--ok-bg);color:var(--ok)}
+.bar{display:flex;align-items:center;gap:8px;min-width:130px}
+.bar i{flex:1;height:8px;border-radius:4px;background:var(--line);overflow:hidden;display:block}
+.bar b{display:block;height:100%;border-radius:4px}
+.bar b.high{background:var(--crit)} .bar b.medium{background:var(--warn)} .bar b.low{background:var(--ok)}
+.bar span{width:52px;text-align:right;font-weight:600}
+
+.detail{position:sticky;top:16px;display:flex;flex-direction:column;gap:14px}
+.detail-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.facts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fact{background:var(--bg);border-radius:8px;padding:9px 11px}
+.fact .v{font-weight:600;font-size:16px}
+.fact .l{font-size:12px;color:var(--muted)}
+.play{border-left:4px solid var(--accent);padding:2px 0 2px 12px}
+.play p{margin-top:4px}
+ol.steps{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+ol.steps li{display:grid;grid-template-columns:64px 1fr;gap:10px}
+ol.steps .when{font-size:12px;font-weight:600;color:var(--accent);padding-top:2px}
+.draft{background:var(--bg);border:1px dashed var(--line);border-radius:8px;padding:12px;white-space:pre-wrap;font-size:14px}
+.draft-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.small{font-size:12.5px}
+
+.offer{display:flex;flex-wrap:wrap;gap:16px;justify-content:space-between;align-items:center;border-left:4px solid var(--accent)}
+.offer p{max-width:70ch}
+.offer a{color:var(--accent);font-weight:600}
+
+.custom{display:none;flex-direction:column;gap:12px;border:1px solid var(--accent)}
+.custom.open{display:flex}
+.custom-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+.custom input[type=color]{padding:2px;height:36px}
+.linkrow{display:flex;gap:8px;flex-wrap:wrap}
+.linkrow input{flex:1;min-width:220px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+
+@media (max-width:900px){
+  .main{grid-template-columns:1fr}
+  .detail{position:static}
+  .kpis{grid-template-columns:repeat(2,1fr)}
+}
+@media (max-width:420px){
+  h1{font-size:27px}
+  .kpis{grid-template-columns:1fr}
+  .facts{grid-template-columns:1fr}
+}
+
+.own{display:none;flex-direction:column;gap:12px;border:1px solid var(--accent)}
+.own.open{display:flex}
+.own-table{min-width:900px}
+.own-table td{padding:5px 6px}
+.own-table input,.own-table select,.own-csv textarea,select.inline,input.pct{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:5px 7px;color:var(--ink);font-variant-numeric:tabular-nums}
+.own-table input{width:92px}
+.own-table input.wide{width:150px}
+.own-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.own-csv{display:flex;flex-direction:column;gap:8px}
+.own-csv summary{cursor:pointer;font-weight:600}
+.own-csv textarea{width:100%;margin:8px 0;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px}
+input.pct{width:64px;text-align:right}
+.row-between{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap}
+
+.brain-scroll{overflow-x:auto;padding:6px 2px 10px}
+.brain{position:relative;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(118px,1fr);gap:38px;min-width:770px;align-items:center}
+.brain-svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+.brain-col{display:flex;flex-direction:column;gap:8px;position:relative;z-index:1}
+.brain-h{font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.neuron{display:flex;flex-direction:column;gap:1px;text-align:left;border:1.5px solid var(--line);background:var(--surface);border-radius:14px;padding:7px 11px;cursor:pointer;font-size:13px;line-height:1.3;width:100%;color:var(--ink)}
+.neuron:hover{border-color:var(--accent)}
+.neuron .ns{font-size:11.5px;color:var(--muted)}
+.neuron.ok{border-color:var(--ok);background:var(--ok-bg)}
+.neuron.late{border-color:var(--crit);background:var(--crit-bg)}
+.neuron.warn{border-color:var(--warn);background:var(--warn-bg)}
+.neuron.active{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--surface))}
+.neuron.add{border-style:dashed;color:var(--muted);font-weight:600;align-items:center}
+.neuron[aria-pressed="true"]{box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 38%,transparent);border-color:var(--accent)}
+.neuron.dim{border-color:var(--line);background:var(--surface)}
+.neuron.dim.ok{background:color-mix(in srgb,var(--ok-bg) 40%,var(--surface))}
+.neuron.dim.late{background:color-mix(in srgb,var(--crit-bg) 40%,var(--surface))}
+.neuron.dim.warn{background:color-mix(in srgb,var(--warn-bg) 40%,var(--surface))}
+.neuron.dim>span{opacity:.5}
+.btn.sm{padding:4px 10px;font-size:13px}
+.syn{fill:none;stroke:var(--muted);stroke-width:1.2;opacity:.45}
+.syn.dim{opacity:.16}
+.syn.lit{stroke:var(--accent);stroke-width:2.4;opacity:1;stroke-dasharray:7 5;animation:flow 1.1s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-24}}
+@media (prefers-reduced-motion:reduce){.syn.lit{animation:none;stroke-dasharray:none}}
+.insp{border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.insp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;align-items:end}
+.insp .field input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent)}
+.insp-bar{display:flex;gap:8px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div>
+      <div class="eyebrow" id="eyebrow">Concept for your customer success team</div>
+      <h1>Bill-shock radar</h1>
+      <p class="lede" id="lede"></p>
+    </div>
+    <div class="top-actions">
+      <span class="tag" id="modeTag">Concept, sample data</span>
+      <button class="btn primary" id="openOwn" type="button">Try with your data</button>
+      <button class="btn" id="openCustom" type="button">Customize</button>
+    </div>
+  </header>
+
+  <section class="panel custom" id="custom" aria-label="Customize this page">
+    <div>
+      <h2>Customize before sending</h2>
+      <p class="muted small">Only you see this panel. The link you copy opens the page without it. Links work once this page is hosted on your own address. Changes you make on the process map travel with the link.</p>
+    </div>
+    <div class="custom-grid">
+      <label class="field" for="cCo">Company name<input id="cCo" type="text" placeholder="Trengo"></label>
+      <label class="field" for="cTo">Founder first name<input id="cTo" type="text" placeholder="Patrick"></label>
+      <label class="field" for="cCw">What they call customers<input id="cCw" type="text" placeholder="accounts"></label>
+      <label class="field" for="cColor">Brand color<input id="cColor" type="color" value="#0B7A5B"></label>
+    </div>
+    <div class="linkrow">
+      <input id="cLink" type="text" readonly aria-label="Shareable link">
+      <button class="btn primary" id="copyLink" type="button">Copy link</button>
+      <button class="btn" id="closeCustom" type="button">Close</button>
+    </div>
+  </section>
+
+  <section class="panel own" id="own" aria-label="Use your own data"></section>
+
+  <section class="kpis" aria-label="Summary">
+    <div class="kpi alert"><div class="v num" id="kHigh">0</div><div class="l" id="kHighL">accounts at high risk</div></div>
+    <div class="kpi"><div class="v num" id="kMrr">$0</div><div class="l">monthly revenue sitting in high risk</div></div>
+    <div class="kpi"><div class="v num" id="kNew">$0</div><div class="l">new Meta charges per month across this book</div></div>
+    <div class="kpi"><div class="v num" id="kWeek">0</div><div class="l" id="kWeekL">to contact this week, renewal inside 60 days</div></div>
+  </section>
+
+  <section class="panel rates" aria-label="Rate assumptions">
+    <div class="rates-head">
+      <h2>Rate assumptions</h2>
+      <p class="muted small">Sample per-message rates in USD. Replace them with Meta's current rate card and everything below recalculates.</p>
+    </div>
+    <div class="rate-grid" id="rateGrid"></div>
+  </section>
+
+  <div class="main">
+    <section class="panel" aria-label="Accounts ranked by exposure">
+      <div class="table-head">
+        <h2 id="tableTitle">Accounts ranked by exposure</h2>
+        <div class="chips" id="chips">
+          <button class="chip" type="button" data-f="all" aria-pressed="true">All</button>
+          <button class="chip" type="button" data-f="high" aria-pressed="false">High</button>
+          <button class="chip" type="button" data-f="medium" aria-pressed="false">Medium</button>
+          <button class="chip" type="button" data-f="low" aria-pressed="false">Low</button>
+        </div>
+      </div>
+      <div class="scroll">
+        <table>
+          <thead><tr>
+            <th>Account</th><th>Risk</th><th class="r">Plan / mo</th><th class="r">New Meta cost / mo</th><th>Versus their plan</th><th class="r">Renewal</th>
+          </tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <aside class="panel detail" id="detail" aria-live="polite"></aside>
+  </div>
+
+  <section class="panel" id="brainPanel" aria-label="How the radar decides" style="display:flex;flex-direction:column;gap:12px"></section>
+
+  <section class="panel offer">
+    <div>
+      <h2 id="offerTitle">I would run this on your real book for 30 days</h2>
+      <p class="muted" id="offerText"></p>
+    </div>
+    <p><strong>Saran Renganath</strong><br><a href="mailto:customersuccess@saranrenganath.com">customersuccess@saranrenganath.com</a></p>
+  </section>
+
+</div>
+<script>
+(function(){
+  var MARKETS={IN:"India",BR:"Brazil",MX:"Mexico",ID:"Indonesia",US:"United States",UK:"United Kingdom",AE:"UAE",DE:"Germany"};
+  var rates={IN:0.0014,BR:0.0068,MX:0.0085,ID:0.025,US:0.004,UK:0.022,AE:0.0157,DE:0.055};
+  var freeTier=1000;
+  var ACCOUNTS=[
+    {n:"Lumen Dental Group",ind:"Clinics",m:"DE",mrr:1490,ren:34,svc:62000,nums:4,util:9000,bub:3.1,who:"Katrin"},
+    {n:"Casa Verde Hotels",ind:"Hospitality",m:"BR",mrr:2400,ren:71,svc:210000,nums:6,util:38000,bub:2.8,who:"Rafael"},
+    {n:"Kirana Express",ind:"Grocery delivery",m:"IN",mrr:499,ren:19,svc:410000,nums:2,util:120000,bub:1.4,who:"Meera"},
+    {n:"Brightlane Auto",ind:"Car dealers",m:"UK",mrr:899,ren:120,svc:28000,nums:3,util:4000,bub:1.2,who:"Tom"},
+    {n:"Souq Atelier",ind:"Fashion retail",m:"AE",mrr:1200,ren:48,svc:95000,nums:2,util:22000,bub:2.2,who:"Layla"},
+    {n:"Peak Physio",ind:"Clinics",m:"US",mrr:650,ren:210,svc:14000,nums:1,util:6000,bub:1.1,who:"Dana"},
+    {n:"Tienda Sur",ind:"Ecommerce",m:"MX",mrr:780,ren:27,svc:130000,nums:3,util:41000,bub:3.4,who:"Diego"},
+    {n:"Harbor Stays",ind:"Short-term rentals",m:"US",mrr:1100,ren:95,svc:52000,nums:5,util:18000,bub:1.6,who:"Chris"},
+    {n:"Nusa Travel",ind:"Travel agency",m:"ID",mrr:560,ren:12,svc:88000,nums:2,util:15000,bub:2.6,who:"Putri"},
+    {n:"Mayfair Lettings",ind:"Property management",m:"UK",mrr:1750,ren:160,svc:46000,nums:8,util:30000,bub:1.3,who:"Hannah"},
+    {n:"Zafran Kitchens",ind:"Restaurants",m:"AE",mrr:420,ren:55,svc:39000,nums:1,util:2500,bub:1.9,who:"Omar"},
+    {n:"Altura Seguros",ind:"Insurance",m:"BR",mrr:3100,ren:240,svc:74000,nums:4,util:60000,bub:1.2,who:"Bianca"}
+  ];
+
+  var SAMPLE=JSON.stringify(ACCOUNTS),DP=null,mapSel="out";
+  var TH={high:25,highRen:12,renDays:60,med:6,merge:2.2,batch:25};
+  var DEF=JSON.stringify({th:TH});
+  function sanProc(o){
+    var d=JSON.parse(DEF).th,th=(o&&o.th)||{},out={};
+    Object.keys(d).forEach(function(k){var v=parseFloat(th[k]);out[k]=isFinite(v)&&v>=0?v:d[k]});
+    return{th:out};
+  }
+  function procNow(){return{th:TH}}
+  var PS=ProcStore("radar",DEF);
+  TH=sanProc(PS.load()).th;
+  function procChanged(){PS.save(procNow());render()}
+  function procReset(){TH=sanProc(PS.reset()).th;mapSel="out";render()}
+  function h(t,c,x){return el(t,c,x)}
+  function add(p){for(var i=1;i<arguments.length;i++)if(arguments[i])p.appendChild(arguments[i]);return p}
+  function inspHead(title,resetFn){
+    var b=h("button","btn sm","Reset the rules");b.type="button";b.addEventListener("click",resetFn);
+    return add(h("div","row-between"),h("h3",null,title),b);
+  }
+  var cfg={co:"",to:"",cw:"accounts",c:"#0B7A5B",view:false};
+  try{
+    var q=new URLSearchParams(location.search);
+    if(q.get("co"))cfg.co=q.get("co").slice(0,60);
+    if(q.get("to"))cfg.to=q.get("to").slice(0,40);
+    if(q.get("cw"))cfg.cw=q.get("cw").slice(0,30);
+    if(/^#?[0-9a-fA-F]{6}$/.test(q.get("c")||""))cfg.c="#"+q.get("c").replace("#","");
+    cfg.view=q.get("view")==="1";
+  }catch(e){}
+
+  var filter="all", selected=null;
+  var $=function(id){return document.getElementById(id)};
+  function pctInput(v,label,cb){
+    var ni=document.createElement("input");ni.className="pct";ni.type="number";ni.min=0;ni.max=100;ni.value=v;ni.setAttribute("aria-label",label);
+    ni.addEventListener("change",function(){cb(Math.max(0,Math.min(100,parseFloat(ni.value)||0)))});
+    return ni;
+  }
+  function clampN(v,lo,hi){v=Math.round(parseFloat(v));if(!isFinite(v))v=lo;return Math.max(lo,Math.min(hi,v))}
+  function fld(label,id,type,val,cb,opts){
+    var l=document.createElement("label");l.className="field";l.htmlFor=id;l.appendChild(document.createTextNode(label));
+    var i;
+    if(type==="select"){i=document.createElement("select");opts.forEach(function(o){var e=document.createElement("option");e.value=String(o[0]);e.textContent=o[1];if(String(o[0])===String(val))e.selected=true;i.appendChild(e)})}
+    else{i=document.createElement("input");i.type=type==="check"?"checkbox":type;if(type==="check")i.checked=!!val;else i.value=val;if(type==="number")i.step="any"}
+    i.id=id;
+    i.addEventListener("change",function(){cb(type==="check"?i.checked:type==="number"?(parseFloat(i.value)||0):i.value)});
+    l.appendChild(i);return l;
+  }
+  function ProcStore(key,def){
+    var base=def,suffix="";
+    try{
+      var q=new URLSearchParams(location.search).get("p");
+      if(q){var js=decodeURIComponent(escape(atob(q)));JSON.parse(js);base=js;var hsh=0;for(var i=0;i<q.length;i++){hsh=(hsh*31+q.charCodeAt(i))>>>0}suffix="_"+hsh.toString(36)}
+    }catch(e){}
+    var K="sr_"+key+"_proc_v1"+suffix;
+    return{
+      load:function(){try{var s=localStorage.getItem(K);if(s)return JSON.parse(s)}catch(e){}return JSON.parse(base)},
+      save:function(o){try{localStorage.setItem(K,JSON.stringify(o))}catch(e){}},
+      reset:function(){try{localStorage.removeItem(K)}catch(e){}return JSON.parse(base)},
+      param:function(o){var s=JSON.stringify(o);if(s===def)return"";try{return btoa(unescape(encodeURIComponent(s)))}catch(e){return""}}
+    };
+  }
+  var brainDraw=null;
+  function Brain(root,model,selId,onSelect){
+    var E=function(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
+    var NS="http://www.w3.org/2000/svg";
+    root.textContent="";
+    var wrap=E("div","brain"),svg=document.createElementNS(NS,"svg");svg.setAttribute("class","brain-svg");svg.setAttribute("aria-hidden","true");
+    wrap.appendChild(svg);
+    var els={},fwd={},back={};
+    function walk(start,dir,seen){
+      var stack=[start];
+      while(stack.length){
+        var cur=stack.pop();
+        model.links.forEach(function(l){
+          var a=dir>0?l[0]:l[1],b=dir>0?l[1]:l[0];
+          if(a===cur&&!seen[b]){seen[b]=true;stack.push(b)}
+        });
+      }
+    }
+    if(selId){walk(selId,1,fwd);walk(selId,-1,back)}
+    model.layers.forEach(function(L){
+      var col=E("div","brain-col");col.appendChild(E("div","brain-h",L.title));
+      L.nodes.forEach(function(n){
+        var lit=!selId||n.id===selId||fwd[n.id]||back[n.id];
+        var b=E("button","neuron "+(n.state||"")+(lit?"":" dim"));b.type="button";
+        b.appendChild(E("span","nl",n.label));if(n.sub)b.appendChild(E("span","ns",n.sub));
+        b.setAttribute("aria-pressed",n.id===selId?"true":"false");
+        b.addEventListener("click",function(){onSelect(n.id)});
+        els[n.id]=b;col.appendChild(b);
+      });
+      if(L.add){var ab=E("button","neuron add",L.add.label);ab.type="button";ab.addEventListener("click",L.add.fn);col.appendChild(ab)}
+      wrap.appendChild(col);
+    });
+    root.appendChild(wrap);
+    function draw(){
+      if(!wrap.isConnected)return;
+      while(svg.firstChild)svg.removeChild(svg.firstChild);
+      var R=wrap.getBoundingClientRect();
+      model.links.forEach(function(l){
+        var a=els[l[0]],b=els[l[1]];if(!a||!b)return;
+        var ra=a.getBoundingClientRect(),rb=b.getBoundingClientRect();
+        var x1=ra.right-R.left,y1=ra.top+ra.height/2-R.top,x2=rb.left-R.left,y2=rb.top+rb.height/2-R.top,dx=Math.max(18,(x2-x1)*0.5);
+        var p=document.createElementNS(NS,"path");
+        p.setAttribute("d","M"+x1.toFixed(1)+" "+y1.toFixed(1)+" C"+(x1+dx).toFixed(1)+" "+y1.toFixed(1)+","+(x2-dx).toFixed(1)+" "+y2.toFixed(1)+","+x2.toFixed(1)+" "+y2.toFixed(1));
+        var lit=selId&&(((l[0]===selId||fwd[l[0]])&&fwd[l[1]])||((l[1]===selId||back[l[1]])&&back[l[0]]));
+        p.setAttribute("class","syn"+(lit?" lit":(selId?" dim":"")));
+        svg.appendChild(p);
+      });
+    }
+    draw();
+    try{requestAnimationFrame(draw);setTimeout(draw,400);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(draw)}catch(e){}
+    return draw;
+  }
+  try{window.addEventListener("resize",function(){if(brainDraw)brainDraw()})}catch(e){}
+  function DataPanel(o){
+    var H=function(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
+    var root=document.getElementById("own"),tag=document.getElementById("modeTag");
+    var KEY="sr_"+o.key+"_v1",self={own:false},status,tbody,msg,area;
+    function norm(s){return String(s).toLowerCase().replace(/[^a-z0-9]/g,"")}
+    function coerce(col,v){
+      if(col.type==="num"){
+        var n=parseFloat(String(v).replace(/[$,%\s]/g,""));if(!isFinite(n))n=0;
+        if(col.min!=null)n=Math.max(col.min,n);if(col.max!=null)n=Math.min(col.max,n);return n;
+      }
+      if(col.type==="select"){
+        var s=norm(v);
+        for(var i=0;i<col.opts.length;i++){if(norm(col.opts[i][0])===s||norm(col.opts[i][1])===s)return col.opts[i][0]}
+        return col.opts[0][0];
+      }
+      return String(v).trim().slice(0,80);
+    }
+    function parseCsv(t){
+      var rows=[],row=[],cur="",q=false;
+      function end(){row.push(cur);cur="";if(row.some(function(c){return c.trim()!==""}))rows.push(row);row=[]}
+      for(var i=0;i<t.length;i++){
+        var ch=t[i];
+        if(q){if(ch==='"'){if(t[i+1]==='"'){cur+='"';i++}else q=false}else cur+=ch}
+        else if(ch==='"')q=true;
+        else if(ch===","||ch==="\t"){row.push(cur);cur=""}
+        else if(ch==="\n"||ch==="\r"){if(ch==="\r"&&t[i+1]==="\n")i++;end()}
+        else cur+=ch;
+      }
+      end();return rows;
+    }
+    function cell(v){v=String(v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}
+    function toCsv(){
+      var out=[o.cols.map(function(c){return cell(c.label)}).join(",")];
+      o.rows().forEach(function(r){
+        out.push(o.cols.map(function(c){
+          var v=r[c.k];
+          if(c.type==="select"){for(var i=0;i<c.opts.length;i++){if(c.opts[i][0]===v)v=c.opts[i][1]}}
+          return cell(v==null?"":v);
+        }).join(","));
+      });
+      return out.join("\n");
+    }
+    function applyCsv(text){
+      var rows=parseCsv(text);
+      if(rows.length<2){msg.textContent="Paste a header line and at least one row.";return}
+      var head=rows[0].map(norm),map=[];
+      o.cols.forEach(function(c,ci){var at=head.indexOf(norm(c.label));if(at<0)at=head.indexOf(norm(c.k));map[ci]=at});
+      if(map[0]<0){msg.textContent="The first line needs a column called "+o.cols[0].label+". Expected columns: "+o.cols.map(function(c){return c.label}).join(", ")+".";return}
+      var made=[];
+      rows.slice(1,201).forEach(function(r){
+        if(!String(r[map[0]]||"").trim())return;
+        var obj=o.blank();
+        o.cols.forEach(function(c,ci){if(map[ci]>=0&&r[map[ci]]!=null&&String(r[map[ci]]).trim()!=="")obj[c.k]=coerce(c,r[map[ci]])});
+        made.push(obj);
+      });
+      if(!made.length){msg.textContent="No rows with a "+o.cols[0].label.toLowerCase()+" were found.";return}
+      o.replace(made);self.own=true;build();o.onChange();
+      msg.textContent="Loaded "+made.length+" row"+(made.length>1?"s":"")+". Columns that were missing kept their default values.";
+    }
+    function build(){
+      tbody.textContent="";
+      o.rows().forEach(function(r,ri){
+        var tr=H("tr");
+        o.cols.forEach(function(c){
+          var td=H("td"),inp;
+          if(c.type==="select"){
+            inp=H("select");c.opts.forEach(function(op){var e=H("option",null,op[1]);e.value=String(op[0]);if(op[0]===r[c.k])e.selected=true;inp.appendChild(e)});
+            inp.addEventListener("change",function(){r[c.k]=coerce(c,inp.value);self.own=true;o.onChange()});
+          }else{
+            inp=H("input");inp.type=c.type==="num"?"number":"text";inp.value=r[c.k]==null?"":r[c.k];
+            if(c.min!=null)inp.min=c.min;if(c.max!=null)inp.max=c.max;if(c.type==="num")inp.step="any";
+            inp.addEventListener("input",function(){r[c.k]=coerce(c,inp.value);self.own=true;o.onChange()});
+          }
+          inp.id="own_"+c.k+"_"+ri;inp.setAttribute("aria-label",c.label+", row "+(ri+1));
+          if(c.type==="text")inp.className="wide";
+          td.appendChild(inp);tr.appendChild(td);
+        });
+        var td=H("td"),del=H("button","btn sm","Remove");del.type="button";
+        del.addEventListener("click",function(){o.rows().splice(ri,1);self.own=true;build();o.onChange()});
+        td.appendChild(del);tr.appendChild(td);tbody.appendChild(tr);
+      });
+      if(!o.rows().length){var tr=H("tr"),td=H("td","muted","No rows yet. Add one, paste a CSV, or reset to the sample data.");td.colSpan=o.cols.length+1;tr.appendChild(td);tbody.appendChild(tr)}
+    }
+    self.build=build;
+    self.sync=function(){
+      if(status){status.textContent=self.own?"Showing your data":"Showing sample data";status.className="pill "+(self.own?"medium":"low")}
+      if(tag)tag.textContent=self.own?"Concept, your data":"Concept, sample data";
+      try{localStorage.setItem(KEY,JSON.stringify({own:self.own,rows:o.rows()}))}catch(e){}
+    };
+    self.load=function(){
+      try{
+        var s=JSON.parse(localStorage.getItem(KEY)||"null");
+        if(s&&Array.isArray(s.rows)&&s.rows.every(function(r){return r&&typeof r.n==="string"})){o.replace(s.rows);self.own=!!s.own;return true}
+      }catch(e){}
+      return false;
+    };
+    self.reset=function(){
+      self.own=false;o.replace(o.sample());try{localStorage.removeItem(KEY)}catch(e){}
+      build();if(msg)msg.textContent="";o.onChange();
+    };
+
+    var head=H("div","row-between");var hl=H("div");hl.appendChild(H("h2",null,"Try it with your own numbers"));
+    hl.appendChild(H("p","muted small","Edit any cell, add rows, or paste a CSV. What you enter stays in this browser and is never sent anywhere. "+(o.note||"")));
+    status=H("span","pill low","Showing sample data");head.appendChild(hl);head.appendChild(status);root.appendChild(head);
+    var table=H("table","own-table"),thead=H("thead"),hr=H("tr");
+    o.cols.forEach(function(c){hr.appendChild(H("th",null,c.label))});hr.appendChild(H("th",null,""));thead.appendChild(hr);
+    tbody=H("tbody");table.appendChild(thead);table.appendChild(tbody);
+    var sc=H("div","scroll");sc.appendChild(table);root.appendChild(sc);
+    var bar=H("div","own-bar");
+    var addB=H("button","btn","Add a row");addB.type="button";addB.addEventListener("click",function(){o.rows().push(o.blank());self.own=true;build();o.onChange()});
+    var resB=H("button","btn","Reset to sample data");resB.type="button";resB.addEventListener("click",function(){self.reset()});
+    var cloB=H("button","btn","Close");cloB.type="button";cloB.addEventListener("click",function(){root.classList.remove("open")});
+    bar.appendChild(addB);bar.appendChild(resB);bar.appendChild(cloB);root.appendChild(bar);
+    var det=H("details","own-csv"),sum=H("summary",null,"Paste or upload a CSV");det.appendChild(sum);
+    area=H("textarea");area.id="ownCsv";area.rows=6;area.setAttribute("aria-label","CSV data");area.placeholder=o.cols.map(function(c){return c.label}).join(",");
+    det.appendChild(area);
+    var bar2=H("div","own-bar");
+    var showB=H("button","btn","Show current data as CSV");showB.type="button";showB.addEventListener("click",function(){area.value=toCsv();msg.textContent="Use this as your template. Keep the header line."});
+    var appB=H("button","btn primary","Load this CSV");appB.type="button";appB.addEventListener("click",function(){applyCsv(area.value)});
+    var file=H("input");file.type="file";file.accept=".csv,.tsv,.txt,text/csv";file.id="ownFile";file.setAttribute("aria-label","Upload a CSV file");
+    file.addEventListener("change",function(){
+      var f=file.files&&file.files[0];if(!f)return;
+      var rd=new FileReader();rd.onload=function(){area.value=String(rd.result||"");applyCsv(area.value)};rd.readAsText(f);
+    });
+    bar2.appendChild(showB);bar2.appendChild(appB);bar2.appendChild(file);det.appendChild(bar2);
+    msg=H("p","muted small","");msg.setAttribute("role","status");det.appendChild(msg);root.appendChild(det);
+    document.getElementById("openOwn").addEventListener("click",function(){root.classList.toggle("open")});
+    return self;
+  }
+
+  var usd=function(v){return "$"+Math.round(v).toLocaleString("en-US")};
+  var int=function(v){return Math.round(v).toLocaleString("en-US")};
+  function el(tag,cls,text){var e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e}
+
+  function calc(a){
+    var r=rates[a.m]||0;
+    var billSvc=Math.max(0,a.svc-freeTier*a.nums);
+    var svcCost=billSvc*r, utilCost=a.util*r, cost=svcCost+utilCost;
+    var pct=a.mrr>0?cost/a.mrr:0;
+    var p100=pct*100,mix=(a.svc+a.util)>0?a.util/(a.svc+a.util):0;
+    var rule=p100>=TH.high?"rHigh":((p100>=TH.highRen&&a.ren<=TH.renDays)?"rRen":(p100>=TH.med?"rMed":"rLow"));
+    var risk=(rule==="rHigh"||rule==="rRen")?"high":(rule==="rMed"?"medium":"low");
+    var play,saving=0;
+    if(a.bub>=TH.merge){play="merge";saving=svcCost*(1-1.2/a.bub)}
+    else if(mix*100>=TH.batch){play="batch";saving=utilCost*0.3}
+    else if(risk==="high"){play="call"}
+    else{play="note"}
+    return {billSvc:billSvc,svcCost:svcCost,utilCost:utilCost,cost:cost,pct:pct,risk:risk,play:play,saving:saving,rule:rule,mix:mix,rate:r};
+  }
+
+  function playCopy(a,c){
+    var co=cfg.co||"us";
+    var sign=cfg.co?("\n\n"+"Your CSM at "+cfg.co):"\n\nYour CSM";
+    if(c.play==="merge")return{
+      title:"Merge the bot's replies",
+      why:"Their flows send about "+a.bub.toFixed(1)+" messages for every customer reply. Each one is now billed. Merging them into one message could save close to "+usd(c.saving)+" a month.",
+      steps:[["Today","Pull their top five flows and count messages per reply."],["Day 2","Send the forecast with a rebuilt version of the busiest flow."],["Day 7","Review the first week of billing together and fix what is left."]],
+      draft:"Hi "+a.who+",\n\nMeta now charges for every service message, and I ran your numbers before the invoice does. At your current volume it comes to about "+usd(c.cost)+" a month.\n\nMost of that comes from your bot answering in "+Math.round(a.bub)+" separate messages. I rebuilt your busiest flow to answer in one. That alone should take roughly "+usd(c.saving)+" off the bill.\n\nI can switch it on this week if you are happy with it."+sign};
+    if(c.play==="batch")return{
+      title:"Batch the status updates",
+      why:"A large share of their volume is utility templates sent inside the service window. Those were free and are now billed. Combining updates could save around "+usd(c.saving)+" a month. That figure is an estimate.",
+      steps:[["Today","List every utility template and how often each one fires."],["Day 3","Propose which updates combine into a single message."],["Day 10","Check delivered volume against the forecast."]],
+      draft:"Hi "+a.who+",\n\nA quick heads-up before your next invoice. Meta now bills utility templates even inside the 24-hour window, which adds about "+usd(c.cost)+" a month at your volume.\n\nYou send several updates per order that could travel as one message. I mapped which ones, and it should bring the bill down by roughly "+usd(c.saving)+".\n\nI will send the list over today so your team can look at it."+sign};
+    if(c.play==="call")return{
+      title:"Forecast call before the invoice",
+      why:"The increase is large next to what they pay "+co+", and there is no quick volume fix. They should hear it from their CSM first, with a number and a plan.",
+      steps:[["Today","Send the forecast and ask for 20 minutes with the budget owner."],["Day 3","Walk through volume by flow and agree what to trim."],["Day 14","Follow up with actuals from the first billing cycle."]],
+      draft:"Hi "+a.who+",\n\nMeta changed how WhatsApp is billed on October 1, and I would rather you hear the number from me than from an invoice. At your current volume it adds about "+usd(c.cost)+" a month.\n\nI have a breakdown by flow and two options to bring it down. I am free Thursday or Friday if you want to go through it with whoever owns the budget."+sign};
+    return{
+      title:"Heads-up note with a forecast",
+      why:"Low exposure. A short note with their number keeps the surprise out of the invoice and costs five minutes.",
+      steps:[["This week","Send the forecast note."],["Next month","Recheck if their volume grows by more than a fifth."]],
+      draft:"Hi "+a.who+",\n\nMeta now bills WhatsApp service messages individually. For you that works out to about "+usd(c.cost)+" a month at current volume, so nothing dramatic.\n\nI will keep an eye on it and flag it if that changes."+sign};
+  }
+
+  function renderRates(){
+    var g=$("rateGrid");g.textContent="";
+    Object.keys(MARKETS).forEach(function(k){
+      var l=el("label","field",MARKETS[k]);l.htmlFor="rate_"+k;
+      var i=el("input");i.type="number";i.step="0.0001";i.min="0";i.id="rate_"+k;i.value=rates[k];
+      i.addEventListener("input",function(){var v=parseFloat(i.value);rates[k]=isFinite(v)&&v>=0?v:0;render()});
+      l.appendChild(i);g.appendChild(l);
+    });
+    var l=el("label","field","Free service messages per number");l.htmlFor="freeTier";
+    var i=el("input");i.type="number";i.step="100";i.min="0";i.id="freeTier";i.value=freeTier;
+    i.addEventListener("input",function(){var v=parseFloat(i.value);freeTier=isFinite(v)&&v>=0?v:0;render()});
+    l.appendChild(i);g.appendChild(l);
+  }
+
+  function render(){
+    var list=ACCOUNTS.map(function(a){return{a:a,c:calc(a)}}).sort(function(x,y){return y.c.pct-x.c.pct});
+    var high=list.filter(function(x){return x.c.risk==="high"});
+    $("kHigh").textContent=high.length;
+    $("kMrr").textContent=usd(high.reduce(function(s,x){return s+x.a.mrr},0));
+    $("kNew").textContent=usd(list.reduce(function(s,x){return s+x.c.cost},0));
+    $("kWeek").textContent=high.filter(function(x){return x.a.ren<=TH.renDays}).length;
+    $("kWeekL").textContent="to contact this week, renewal inside "+TH.renDays+" days";
+
+    var shown=list.filter(function(x){return filter==="all"||x.c.risk===filter});
+    if(!selected||!shown.some(function(x){return x.a===selected}))selected=shown.length?shown[0].a:null;
+    var tb=$("rows");tb.textContent="";
+    shown.forEach(function(x){
+      var tr=el("tr");tr.tabIndex=0;tr.setAttribute("aria-selected",x.a===selected?"true":"false");
+      var td=el("td","acct",x.a.n);td.appendChild(el("small",null,x.a.ind+", "+MARKETS[x.a.m]));tr.appendChild(td);
+      td=el("td");td.appendChild(el("span","pill "+x.c.risk,x.c.risk.charAt(0).toUpperCase()+x.c.risk.slice(1)));tr.appendChild(td);
+      tr.appendChild(el("td","r num",usd(x.a.mrr)));
+      tr.appendChild(el("td","r num",usd(x.c.cost)));
+      td=el("td");var bar=el("div","bar");var track=el("i");var fill=el("b",x.c.risk);
+      fill.style.width=Math.min(100,x.c.pct*100)+"%";track.appendChild(fill);bar.appendChild(track);
+      bar.appendChild(el("span","num",Math.round(x.c.pct*100)+"%"));td.appendChild(bar);tr.appendChild(td);
+      tr.appendChild(el("td","r num",x.a.ren+" days"));
+      var pick=function(){selected=x.a;render()};
+      tr.addEventListener("click",pick);
+      tr.addEventListener("keydown",function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();pick()}});
+      tb.appendChild(tr);
+    });
+    if(!shown.length){var tr=el("tr");var td=el("td","muted","No accounts at this risk level with the current rates.");td.colSpan=6;tr.appendChild(td);tb.appendChild(tr)}
+    renderDetail(list.filter(function(x){return x.a===selected})[0]);
+    renderBrain(list.filter(function(x){return x.a===selected})[0]);buildLink();
+    if(DP)DP.sync();
+  }
+
+  function renderBrain(x){
+    var P=$("brainPanel");P.textContent="";
+    var hd=add(h("div"),h("h2",null,"How the radar decides"),h("p","muted small","Signals on the left, the decision on the right. The lit path is the reasoning for the selected account. Pick a rule to change its threshold."));
+    P.appendChild(hd);
+    if(!x){P.appendChild(h("p","muted","Pick an account to see its reasoning."));brainDraw=null;return}
+    var a=x.a,c=x.c,RISK={rHigh:"high",rRen:"high",rMed:"medium",rLow:"low"},PLAYS={merge:"pMerge",batch:"pBatch",call:"pCall",note:"pNote"};
+    var TITLES={merge:"Merge the bot's replies",batch:"Batch the status updates",call:"Forecast call before the invoice",note:"Heads-up note with a forecast"};
+    function rs(id){return c.rule===id?(RISK[id]==="high"?"late":RISK[id]==="medium"?"warn":"ok"):""}
+    function ps(id){return PLAYS[c.play]===id?"active":""}
+    var links=[["svc","cost"],["util","cost"],["rate","cost"],["cost","pct"],["fee","pct"],["svc","mix"],["util","mix"],
+      ["pct","rHigh"],["pct","rRen"],["pct","rMed"],["pct","rLow"],["ren","rRen"],["bub","pMerge"],["mix","pBatch"],["rHigh","pCall"],["rRen","pCall"],
+      [c.rule,"out"],[PLAYS[c.play],"out"]];
+    var model={links:links,layers:[
+      {title:"Signals",nodes:[
+        {id:"svc",label:"Service messages",sub:int(a.svc)+" a month"},
+        {id:"util",label:"Utility templates in window",sub:int(a.util)+" a month"},
+        {id:"rate",label:"Market rate",sub:MARKETS[a.m]+", $"+c.rate+" a message"},
+        {id:"fee",label:"Plan fee",sub:usd(a.mrr)+" a month"},
+        {id:"ren",label:"Renewal",sub:"in "+a.ren+" days"},
+        {id:"bub",label:"Messages per bot reply",sub:String(a.bub)}]},
+      {title:"Calculated",nodes:[
+        {id:"cost",label:"New Meta cost",sub:usd(c.cost)+" a month"},
+        {id:"pct",label:"Cost versus plan",sub:Math.round(c.pct*100)+"%"},
+        {id:"mix",label:"Utility share of volume",sub:Math.round(c.mix*100)+"%"}]},
+      {title:"Risk rules",nodes:[
+        {id:"rHigh",label:"High: cost is "+TH.high+"% of plan or more",state:rs("rHigh")},
+        {id:"rRen",label:"High: "+TH.highRen+"% or more and renewal inside "+TH.renDays+" days",state:rs("rRen")},
+        {id:"rMed",label:"Medium: "+TH.med+"% or more",state:rs("rMed")},
+        {id:"rLow",label:"Low: under "+TH.med+"%",state:rs("rLow")}]},
+      {title:"Play rules",nodes:[
+        {id:"pMerge",label:"Merge replies: "+TH.merge+" or more messages per reply",state:ps("pMerge")},
+        {id:"pBatch",label:"Batch updates: utility share "+TH.batch+"% or more",state:ps("pBatch")},
+        {id:"pCall",label:"Forecast call: high risk with no volume fix",state:ps("pCall")},
+        {id:"pNote",label:"Heads-up note: everything else",state:ps("pNote")}]},
+      {title:"Decision",nodes:[{id:"out",label:a.n,sub:c.risk.charAt(0).toUpperCase()+c.risk.slice(1)+" risk. "+TITLES[c.play]+".",state:c.risk==="high"?"late":c.risk==="medium"?"warn":"ok"}]}
+    ]};
+    var ids={};model.layers.forEach(function(Ly){Ly.nodes.forEach(function(n){ids[n.id]=true})});
+    if(!ids[mapSel])mapSel="out";
+    var holder=h("div","brain-scroll");P.appendChild(holder);
+    brainDraw=Brain(holder,model,mapSel,function(id){mapSel=id;render()});
+    var box=h("div","insp"),grid=h("div","insp-grid");
+    function th(label,key,lo,hi){return fld(label,"i_"+key,"number",TH[key],function(v){TH[key]=Math.max(lo,Math.min(hi,v));procChanged()})}
+    if(mapSel==="rHigh"){box.appendChild(inspHead("Rule: high risk on cost alone",procReset));grid.appendChild(th("Cost as a percent of plan fee","high",0,1000));box.appendChild(grid)}
+    else if(mapSel==="rRen"){box.appendChild(inspHead("Rule: high risk near renewal",procReset));add(grid,th("Cost as a percent of plan fee","highRen",0,1000),th("Renewal inside this many days","renDays",0,730));box.appendChild(grid)}
+    else if(mapSel==="rMed"||mapSel==="rLow"){box.appendChild(inspHead("Rule: where medium risk starts",procReset));grid.appendChild(th("Cost as a percent of plan fee","med",0,1000));box.appendChild(grid)}
+    else if(mapSel==="pMerge"){box.appendChild(inspHead("Rule: when to merge bot replies",procReset));grid.appendChild(th("Messages per bot reply","merge",1,20));box.appendChild(grid)}
+    else if(mapSel==="pBatch"){box.appendChild(inspHead("Rule: when to batch status updates",procReset));grid.appendChild(th("Utility share of volume, percent","batch",0,100));box.appendChild(grid)}
+    else if(mapSel==="out"){box.appendChild(inspHead("Decision for "+a.n,procReset));box.appendChild(h("p","muted small","The lit path is everything that led to this call. Pick any rule on the map to change its threshold, and every account is scored again."))}
+    else if(mapSel==="pCall"||mapSel==="pNote"){box.appendChild(inspHead("Fallback plays",procReset));box.appendChild(h("p","muted small","These apply when neither volume fix fits. High risk gets a call, everything else gets a note."))}
+    else{box.appendChild(inspHead("Signal",procReset));box.appendChild(h("p","muted small","This comes from the account's data. Change it with Try with your data, or the market rate in the rate assumptions."))}
+    P.appendChild(box);
+  }
+  function renderDetail(x){
+    var d=$("detail");d.textContent="";
+    if(!x){d.appendChild(el("p","muted","Pick an account to see the play."));return}
+    var a=x.a,c=x.c,p=playCopy(a,c);
+    var top=el("div","detail-top");var t=el("div");t.appendChild(el("h2",null,a.n));t.appendChild(el("p","muted small",a.ind+", "+MARKETS[a.m]+", renews in "+a.ren+" days"));
+    top.appendChild(t);top.appendChild(el("span","pill "+c.risk,c.risk.charAt(0).toUpperCase()+c.risk.slice(1)+" risk"));d.appendChild(top);
+
+    var f=el("div","facts");
+    [[int(a.svc),"service messages a month"],[int(c.billSvc),"billable after the free tier"],[int(a.util),"utility templates in window"],[usd(c.cost),"new Meta cost a month"]].forEach(function(r){
+      var b=el("div","fact");b.appendChild(el("div","v num",r[0]));b.appendChild(el("div","l",r[1]));f.appendChild(b)});
+    d.appendChild(f);
+
+    var pl=el("div","play");pl.appendChild(el("div","eyebrow","Recommended play"));pl.appendChild(el("h3",null,p.title));pl.appendChild(el("p","muted",p.why));d.appendChild(pl);
+
+    var ol=el("ol","steps");p.steps.forEach(function(s){var li=el("li");li.appendChild(el("span","when",s[0]));li.appendChild(el("span",null,s[1]));ol.appendChild(li)});d.appendChild(ol);
+
+    var dh=el("div","draft-head");dh.appendChild(el("h3",null,"Draft note to "+a.who));
+    var cp=el("button","btn","Copy");cp.type="button";
+    cp.addEventListener("click",function(){copy(p.draft,cp,"Copy")});dh.appendChild(cp);d.appendChild(dh);
+    d.appendChild(el("div","draft",p.draft));
+  }
+
+  function copy(text,btn,label){
+    var done=function(ok){btn.textContent=ok?"Copied":"Select and copy";setTimeout(function(){btn.textContent=label},1600)};
+    try{navigator.clipboard.writeText(text).then(function(){done(true)},function(){done(false)})}catch(e){done(false)}
+  }
+
+  function onAccent(hex){
+    var r=parseInt(hex.substr(1,2),16),g=parseInt(hex.substr(3,2),16),b=parseInt(hex.substr(5,2),16);
+    return (0.299*r+0.587*g+0.114*b)>160?"#14201B":"#FFFFFF";
+  }
+
+  function applyCfg(){
+    document.documentElement.style.setProperty("--accent",cfg.c);
+    document.documentElement.style.setProperty("--on-accent",onAccent(cfg.c));
+    var cw=cfg.cw||"accounts";
+    $("eyebrow").textContent=cfg.co?("Concept for the "+cfg.co+" customer success team"):"Concept for your customer success team";
+    $("lede").textContent=(cfg.to?cfg.to+", since":"Since")+" October 1, 2026, Meta bills service messages and in-window utility templates per message. This view ranks "+cw+" by how hard that lands on them, and shows what I would do about each one before the invoice arrives. The map further down shows how each call is made, and every rule on it is yours to change.";
+    $("kHighL").textContent=cw+" at high risk";
+    $("tableTitle").textContent=cw.charAt(0).toUpperCase()+cw.slice(1)+" ranked by exposure";
+    $("offerText").textContent="This page opens with sample data, and no "+(cfg.co||"company")+" numbers were used to build it. Give me read access to message volume by account and I will build this view for real, contact the high-risk "+cw+" myself, and report back on what moved. One month, one problem, no cost.";
+    document.title=cfg.co?("Bill-shock radar for "+cfg.co):"Bill-shock radar";
+    showEdit();
+  }
+
+  function editMode(){var e=false;try{e=location.hash==="#edit"||new URLSearchParams(location.search).get("edit")==="1"}catch(x){}return e}
+  function showEdit(){var on=editMode();$("openCustom").style.display=on?"":"none";if(!on)$("custom").classList.remove("open")}
+  try{window.addEventListener("hashchange",showEdit)}catch(x){}
+  function buildLink(){
+    var p=new URLSearchParams();
+    if(cfg.co)p.set("co",cfg.co);if(cfg.to)p.set("to",cfg.to);
+    if(cfg.cw&&cfg.cw!=="accounts")p.set("cw",cfg.cw);
+    p.set("c",cfg.c.replace("#",""));p.set("view","1");
+    var pp=PS.param(procNow());if(pp)p.set("p",pp);
+    var base="";try{base=location.origin+location.pathname}catch(e){}
+    $("cLink").value=base+"?"+p.toString();
+  }
+
+  $("openCustom").addEventListener("click",function(){$("custom").classList.add("open");$("cCo").focus()});
+  $("closeCustom").addEventListener("click",function(){$("custom").classList.remove("open")});
+  $("copyLink").addEventListener("click",function(){$("cLink").select();copy($("cLink").value,$("copyLink"),"Copy link")});
+  [["cCo","co"],["cTo","to"],["cCw","cw"],["cColor","c"]].forEach(function(pair){
+    $(pair[0]).addEventListener("input",function(){
+      var v=$(pair[0]).value.trim();
+      cfg[pair[1]]=pair[1]==="cw"?(v||"accounts"):(pair[1]==="c"?(v||"#0B7A5B"):v);
+      applyCfg();buildLink();render();
+    });
+  });
+  $("chips").addEventListener("click",function(e){
+    var b=e.target.closest(".chip");if(!b)return;filter=b.dataset.f;
+    Array.prototype.forEach.call(document.querySelectorAll(".chip"),function(c){c.setAttribute("aria-pressed",c===b?"true":"false")});
+    render();
+  });
+
+  $("cCo").value=cfg.co;$("cTo").value=cfg.to;$("cCw").value=cfg.cw==="accounts"?"":cfg.cw;$("cColor").value=cfg.c;
+  DP=DataPanel({key:"radar",note:"Rates are edited in the panel below.",
+    cols:[{k:"n",label:"Account",type:"text"},{k:"ind",label:"Industry",type:"text"},
+      {k:"m",label:"Market",type:"select",opts:Object.keys(MARKETS).map(function(k){return[k,MARKETS[k]]})},
+      {k:"mrr",label:"Plan fee per month",type:"num",min:0},{k:"ren",label:"Days to renewal",type:"num",min:0},
+      {k:"svc",label:"Service messages per month",type:"num",min:0},{k:"nums",label:"Phone numbers",type:"num",min:0},
+      {k:"util",label:"Utility templates in window",type:"num",min:0},{k:"bub",label:"Messages per bot reply",type:"num",min:1},
+      {k:"who",label:"Contact first name",type:"text"}],
+    rows:function(){return ACCOUNTS},
+    replace:function(r){ACCOUNTS=r;selected=null},
+    blank:function(){return{n:"New account",ind:"",m:"US",mrr:500,ren:90,svc:10000,nums:1,util:0,bub:1,who:"there"}},
+    sample:function(){return JSON.parse(SAMPLE)},
+    onChange:function(){render()}});
+  DP.load();DP.build();
+  applyCfg();buildLink();renderRates();
+  try{render()}catch(e){procReset();DP.reset()}
+})();
+</script>
+</body>
+</html>
