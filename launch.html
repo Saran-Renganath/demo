@@ -250,6 +250,28 @@ input.pct{width:64px;text-align:right}
 .len-field{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px}
 .len-field input{width:70px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;color:var(--ink);font-variant-numeric:tabular-nums}
 .btn.sm.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--surface))}
+
+.pwrap{position:relative}
+.pwrap .pnode{padding-right:26px}
+.pdel{position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:6px;border:1px solid transparent;background:transparent;color:var(--muted);font-size:15px;line-height:1;cursor:pointer;opacity:.55;display:flex;align-items:center;justify-content:center}
+.pdel:hover,.pdel:focus-visible{opacity:1;color:var(--crit);border-color:var(--crit);background:var(--crit-bg)}
+.lane-add{border:1px dashed var(--line);background:transparent;border-radius:8px;padding:5px 8px;font-size:12.5px;font-weight:600;color:var(--muted);cursor:pointer;text-align:left}
+.lane-add:hover{border-color:var(--accent);color:var(--ink)}
+.lane-empty{font-size:12px;color:var(--muted);padding:2px 4px}
+.btn.danger{color:var(--crit)}
+.btn.danger.armed{background:var(--crit);color:#fff;border-color:var(--crit)}
+.map-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+.nwrap{display:flex;flex-direction:column}
+.nwrap.open>.pnode,.nwrap.open>.gnode{border-bottom-left-radius:0;border-bottom-right-radius:0}
+.npanel{display:flex;flex-direction:column;gap:8px;padding:9px;border:1px solid var(--accent);border-top:0;border-radius:0 0 8px 8px;background:var(--surface)}
+.lane>.npanel,.nwrap>.pm-verdict+.npanel{border-top:1px solid var(--accent);border-radius:8px;margin-top:2px}
+.npanel .field{font-size:12px}
+.npanel .field input,.npanel .field select{width:100%;padding:6px 8px;font-size:13px}
+.npanel .field input[type=checkbox]{width:18px;height:18px}
+.nbar{display:flex;flex-wrap:wrap;gap:6px}
+.nnote{font-size:12px;color:var(--muted);margin:0}
+.btn.sm.primary{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
 </style>
 </head>
 <body>
@@ -330,19 +352,19 @@ input.pct{width:64px;text-align:right}
   var FEEDS={kick:"plan",pms:"sys",docs:"ai",journey:"plan",train_ai:"ai",esc:"esc",fd_train:"staff",tmpl:"plan",soft:"plan",esc_test:"esc",tune:"ai",night:"staff",live:"plan",review:"plan"};
   TASKS.forEach(function(t){t.feeds=FEEDS[t.id]||"plan"});
   var GI={sys:0,ai:1,staff:2,esc:3,plan:4};
-  var FEED_OPTS=[["plan","Plan only"],["sys","Systems gate"],["ai","AI readiness gate"],["staff","Staff training gate"],["esc","Escalation gate"]];
-  var TH={ready:85,staff:80};
-  var DEF=JSON.stringify({tasks:TASKS,th:TH});
+  var FEED_OPTS=[["plan","No overdue tasks"],["sys","Systems connected"],["ai","AI readiness"],["staff","Staff trained"],["esc","Escalation tested"]];
+  var TH={ready:85,staff:80},PLEN=7;
+  var DEF=JSON.stringify({tasks:TASKS,th:TH,len:7});
   function sanProc(o){
     var d=JSON.parse(DEF);
     if(!o||!Array.isArray(o.tasks))return d;
     var ts=o.tasks.filter(function(x){return x&&x.id!=null&&typeof x.t==="string"}).map(function(x){
       return{id:String(x.id),day:clampN(x.day,1,60),t:x.t.slice(0,90),o:String(x.o||"CS").slice(0,24),feeds:GI.hasOwnProperty(x.feeds)?x.feeds:"plan"}});
-    var th=o.th||{};
-    return{tasks:ts,th:{ready:clampN(th.ready==null?85:th.ready,0,100),staff:clampN(th.staff==null?80:th.staff,0,100)}};
+    var th=o.th||{},mx=0;ts.forEach(function(x){mx=Math.max(mx,x.day)});
+    return{tasks:ts,th:{ready:clampN(th.ready==null?85:th.ready,0,100),staff:clampN(th.staff==null?80:th.staff,0,100)},len:clampN(o.len==null?(mx||7):Math.max(o.len,mx),1,60)};
   }
-  function procNow(){return{tasks:TASKS,th:TH}}
-  function LEN(){var m=1;TASKS.forEach(function(t){m=Math.max(m,t.day)});return m}
+  function procNow(){return{tasks:TASKS,th:TH,len:PLEN}}
+  function LEN(){var m=Math.max(1,PLEN);TASKS.forEach(function(t){m=Math.max(m,t.day)});return m}
   var CATS=[
     {k:"arrival",l:"Check-in, check-out, early arrival",vol:18,doc:"Front office SOP",dept:"the front desk",q:"Can I check in at 11am?",a:"Check-in opens at 3pm. Early arrival from 11am is free when a room is ready, and I have added a note to your booking."},
     {k:"dining",l:"Restaurants and room service",vol:16,doc:"Restaurant menus and hours",dept:"the restaurant host",q:"Is the rooftop restaurant open tonight?",a:"Yes, the rooftop is open from 6pm to 11pm tonight. Shall I hold a table for two?"},
@@ -371,10 +393,10 @@ input.pct{width:64px;text-align:right}
 
   var SAMPLE=JSON.stringify(PROPS),DP=null,mapSel=null;
   var PS=ProcStore("launch",DEF);
-  (function(){var s=sanProc(PS.load());TASKS=s.tasks;TH=s.th})();
+  (function(){var s=sanProc(PS.load());TASKS=s.tasks;TH=s.th;PLEN=s.len})();
   function procChanged(){PS.save(procNow());render()}
   var justReset=false;
-  function procReset(){var s=sanProc(PS.reset());TASKS=s.tasks;TH=s.th;justReset=true;render();justReset=false;setTimeout(function(){render()},1600)}
+  function procReset(){var s=sanProc(PS.reset());TASKS=s.tasks;TH=s.th;PLEN=s.len;justReset=true;render();justReset=false;setTimeout(function(){render()},1600)}
   var cfg={co:"",to:"",cw:"properties",c:"#0B7A5B",view:false};
   try{
     var q=new URLSearchParams(location.search);
@@ -489,21 +511,28 @@ input.pct{width:64px;text-align:right}
       }
     }
     function cls(base,id,state){return base+" "+(state||"")+(selId?(rel[id]?" rel":" fade"):"")}
+    function panel(id){if(id!==selId||!m.panel)return null;return m.panel(id)}
     var els={};
     function node(base,n){
+      var w=E("div","nwrap"+(n.id===selId?" open":""));
       var b=E("button",cls(base,n.id,n.state));b.type="button";
+      if(n.pill)b.appendChild(E("span","pill "+n.pill[0],n.pill[1]));
       b.appendChild(E("span","nl",n.label));if(n.sub)b.appendChild(E("span","nm",n.sub));
       b.setAttribute("aria-pressed",n.id===selId?"true":"false");
       b.addEventListener("click",function(){onSelect(n.id)});
-      els[n.id]=b;return b;
+      els[n.id]=b;w.appendChild(b);
+      var pe=panel(n.id);if(pe)w.appendChild(pe);
+      return w;
     }
     var pm=E("div","pm");
-    var v=m.verdict,vb=E("button","pm-verdict "+(v.state||""));vb.type="button";
+    var v=m.verdict,vw=E("div","nwrap"+(selId==="out"?" open":"")),vb=E("button","pm-verdict "+(v.state||""));vb.type="button";
     vb.setAttribute("aria-pressed",selId==="out"?"true":"false");
     var vl=E("div");vl.appendChild(E("div","pm-h",m.verdictTitle));vl.appendChild(E("div","pm-vl",v.label));
     vb.appendChild(vl);vb.appendChild(E("div","pm-vs",v.sub));
     vb.addEventListener("click",function(){onSelect("out")});
-    pm.appendChild(vb);
+    vw.appendChild(vb);var vp=panel("out");if(vp)vw.appendChild(vp);
+    pm.appendChild(vw);
+    if(m.tools)pm.appendChild(m.tools);
     var grid=E("div","pm-grid"),svg=document.createElementNS(NS,"svg");svg.setAttribute("class","pm-svg");svg.setAttribute("aria-hidden","true");
     var left=E("div","pm-left");left.appendChild(E("div","pm-h",m.lanesTitle));
     var lanes=E("div","pm-lanes");
@@ -515,17 +544,19 @@ input.pct{width:64px;text-align:right}
       hd.appendChild(top);hd.appendChild(E("span","nm",l.sub));
       hd.addEventListener("click",function(){onSelect(l.id)});
       lane.appendChild(hd);
+      var lp=panel(l.id);if(lp)lane.appendChild(lp);
       var bar=E("div","lane-bar"),fill=E("b");fill.style.width=(l.steps.length?Math.round(100*l.steps.filter(function(s){return s.state==="ok"}).length/l.steps.length):0)+"%";bar.appendChild(fill);lane.appendChild(bar);
       l.steps.forEach(function(s){lane.appendChild(node("pnode",s))});
+      if(!l.steps.length)lane.appendChild(E("div","lane-empty","No steps yet"));
+      if(l.addFn){var la=E("button","lane-add","+ Add a step");la.type="button";la.addEventListener("click",l.addFn);lane.appendChild(la)}
       lanes.appendChild(lane);
     });
     if(m.add){var ab=E("button","lane add",m.add.label);ab.type="button";ab.addEventListener("click",m.add.fn);lanes.appendChild(ab)}
     left.appendChild(lanes);
     var right=E("div","pm-right");right.appendChild(E("div","pm-h",m.gatesTitle));
     m.gates.forEach(function(g){
-      var b=node("gnode",g);
-      var pill=E("span","pill "+(g.state==="ok"?"low":"high"),g.state==="ok"?"Pass":"Open");b.insertBefore(pill,b.firstChild);
-      right.appendChild(b);
+      g.pill=[g.state==="ok"?"low":"high",g.state==="ok"?"Pass":"Open"];
+      right.appendChild(node("gnode",g));
     });
     grid.appendChild(left);grid.appendChild(right);grid.appendChild(svg);
     pm.appendChild(grid);root.appendChild(pm);
@@ -782,14 +813,14 @@ input.pct{width:64px;text-align:right}
   function renderMap(p,box){
     var L=LEN(),g=gates(p),open=g.filter(function(x){return !x.ok}).length,s=slip(p);
     var sorted=TASKS.slice().sort(function(a,b){return a.day-b.day}),days=[];
-    sorted.forEach(function(t){if(days.indexOf(t.day)<0)days.push(t.day)});
+    for(var dd=1;dd<=L;dd++)days.push(dd);
     var lanes=days.map(function(d){
       var ts=sorted.filter(function(t){return t.day===d}),dn=ts.filter(function(t){return p.done[t.id]}).length;
       var late=ts.some(function(t){return !p.done[t.id]&&t.day<p.day});
-      return{id:"d"+d,label:"Day "+d,tag:d===p.day?"Today":"",today:d===p.day,sub:dn+" of "+ts.length+" done",state:late?"late":(dn===ts.length?"ok":""),
+      return{id:"d"+d,label:"Day "+d,tag:d===p.day?"Today":"",today:d===p.day,sub:ts.length?dn+" of "+ts.length+" done":"Empty day",state:late?"late":(ts.length&&dn===ts.length?"ok":""),addFn:function(){addStep(d)},
         steps:ts.map(function(t){
           var lt=!p.done[t.id]&&t.day<p.day;
-          return{id:"t_"+t.id,label:t.t,sub:p.done[t.id]?"Done, "+t.o:(lt?(p.day-t.day)+"d late, "+t.o:t.o),state:p.done[t.id]?"ok":(lt?"late":""),gate:"g"+GI[t.feeds]};
+          return{id:"t_"+t.id,label:t.t,sub:p.done[t.id]?"Done, "+t.o:(lt?(p.day-t.day)+"d late, "+t.o:t.o),state:p.done[t.id]?"ok":(lt?"late":""),gate:"g"+GI[t.feeds],delFn:function(){delStep(t.id)}};
         })};
     });
     var model={
@@ -797,25 +828,26 @@ input.pct{width:64px;text-align:right}
       verdict:{label:open===0?"Ready to go live":"Hold the go-live",sub:"Projected go-live day "+(L+s)+". "+open+" of "+g.length+" gates open.",state:open===0?"ok":"late"},
       lanesTitle:"The "+L+"-day plan",
       lanes:lanes,
-      add:{label:"Add a step",fn:function(){addStep(p.day)}},
+      add:L<60?{label:"+ Add a day",fn:addDay}:null,
       gatesTitle:"Gates",
       gates:g.map(function(x,i){return{id:"g"+i,label:x.l,sub:x.d,state:x.ok?"ok":"late"}})
     };
     var ids={out:true};lanes.forEach(function(l){ids[l.id]=true;l.steps.forEach(function(s){ids[s.id]=true})});model.gates.forEach(function(x){ids[x.id]=true});
     if(!mapSel||!ids[mapSel]){
       var firstLate=sorted.filter(function(t){return !p.done[t.id]&&t.day<p.day})[0],firstOpen=sorted.filter(function(t){return !p.done[t.id]})[0];
-      mapSel=firstLate?"t_"+firstLate.id:(firstOpen?"t_"+firstOpen.id:"out");
+      mapSel=firstLate?"t_"+firstLate.id:(firstOpen?"t_"+firstOpen.id:(sorted.length?"out":"d1"));
     }
     box.appendChild(lengthBar());
-    box.appendChild(h("p","hint","Each card is a day of the launch, and the gates sit on the right. Pick a step to see which gate it unlocks, a gate to see every step behind it, or the go-live call to see what is holding it. Edit whatever you pick underneath."));
+    box.appendChild(h("p","hint","Each card is a day of the launch, and the gates sit on the right. Click any step, day or gate for its options. The line shows which gate a step unlocks."));
     var holder=h("div");box.appendChild(holder);
-    brainDraw=PMap(holder,model,mapSel,function(id){mapSel=id;renderDetail()});
-    box.appendChild(inspect(p,g));
+    model.panel=function(id){return nodePanel(p,g,id)};
+    brainDraw=PMap(holder,model,mapSel,function(id){if(id!==mapSel)editId=null;mapSel=id;renderDetail()});
+    focusName();
   }
   function setLength(n){
-    n=clampN(n,1,60);var old=LEN();if(n===old||!TASKS.length)return;
+    n=clampN(n,1,60);var old=LEN();if(n===old)return;
     TASKS.forEach(function(x){x.day=Math.max(1,Math.min(n,Math.round(x.day*n/old)))});
-    procChanged();
+    PLEN=n;procChanged();
   }
   function lengthBar(){
     var bar=h("div","len-bar"),lab=h("label","len-field");lab.htmlFor="lenIn";
@@ -828,13 +860,86 @@ input.pct{width:64px;text-align:right}
       var b=h("button","btn sm"+(d===LEN()?" on":""),d+" days");b.type="button";
       b.addEventListener("click",function(){setLength(d)});bar.appendChild(b);
     });
-    bar.appendChild(h("span","muted small","Every step moves in proportion. Fine-tune any step by picking it."));
+    var ad=h("button","btn sm","+ Add a day");ad.type="button";ad.addEventListener("click",addDay);bar.appendChild(ad);
+    bar.appendChild(confirmBtn("Start from scratch","Click again to clear every step",startScratch));
+    bar.appendChild(resetBtn("Reset the process"));
+    bar.appendChild(h("span","muted small","Changing the length moves every step in proportion. Start from scratch leaves one empty day to build on."));
     return bar;
+  }
+  function nodePanel(p,g,id){
+    var box=h("div","npanel");
+    if(id.indexOf("t_")===0){
+      var t=TASKS.filter(function(x){return "t_"+x.id===id})[0];if(!t)return null;
+      if(editId===id){
+        add(box,
+          fld("Step name","i_name","text",t.t,function(v){t.t=v.trim().slice(0,90)||"Untitled step";procChanged()}),
+          fld("Owner","i_owner","text",t.o,function(v){t.o=v.trim().slice(0,24)||"CS";procChanged()}),
+          fld("Day","i_day","number",t.day,function(v){t.day=clampN(v,1,60);procChanged()}),
+          fld("Unlocks gate","i_feeds","select",t.feeds,function(v){t.feeds=GI.hasOwnProperty(v)?v:"plan";procChanged()},FEED_OPTS),
+          nbar(doneBtn(),nbtn("Delete","danger",function(){delStep(t.id)})));
+      }else{
+        box.appendChild(nbar(
+          nbtn("Edit","",function(){editId=id;focusNew=true;renderDetail()}),
+          nbtn("Delete","danger",function(){delStep(t.id)}),
+          nbtn(p.done[t.id]?"Mark not done":"Mark done","",function(){if(p.done[t.id])delete p.done[t.id];else p.done[t.id]=true;render()})));
+      }
+      return box;
+    }
+    if(id==="g1"||id==="g2"){
+      var key=id==="g1"?"ready":"staff";
+      if(editId===id)add(box,fld(id==="g1"?"Readiness needed to pass":"Average staff trained to pass, %","i_th","number",TH[key],function(v){TH[key]=clampN(v,0,100);procChanged()}),nbar(doneBtn()));
+      else box.appendChild(nbar(nbtn("Edit threshold","",function(){editId=id;renderDetail()})));
+      box.appendChild(h("p","nnote",id==="g1"?"Readiness comes from document coverage on the AI readiness tab.":"Training comes from the department figures on the go-live gate tab."));
+      return box;
+    }
+    if(id.charAt(0)==="g"){box.appendChild(h("p","nnote",id==="g4"?"Passes when no step is past its day.":"Passes when every step that unlocks it is done. Point a step here from its Edit option."));return box}
+    if(id.charAt(0)==="d"){
+      var d=Number(id.slice(1)),n=TASKS.filter(function(x){return x.day===d}).length;
+      var b=nbar(nbtn("+ Add a step","",function(){addStep(d)}));
+      if(LEN()>1)b.appendChild(n?confirmBtn("Delete day","Click again to delete it and its "+n+" step"+(n>1?"s":""),function(){removeDay(d)}):nbtn("Delete day","danger",function(){removeDay(d)}));
+      box.appendChild(b);
+      if(LEN()>1)box.appendChild(h("p","nnote","Deleting a day moves every later step one day earlier."));
+      return box;
+    }
+    if(id==="out"){box.appendChild(h("p","nnote","Every gate has to pass before the launch is ready. The open gates and the unfinished steps behind them are highlighted."));return box}
+    return null;
   }
   function addStep(day){
     var id="x"+Date.now().toString(36);
-    TASKS.push({id:id,day:clampN(day,1,60),t:"New step",o:"CS",feeds:"plan"});mapSel="t_"+id;procChanged();
+    TASKS.push({id:id,day:clampN(day,1,60),t:"New step",o:"CS",feeds:"plan"});mapSel="t_"+id;editId="t_"+id;focusNew=true;procChanged();
   }
+  function delStep(id){
+    for(var i=0;i<TASKS.length;i++){if(TASKS[i].id===id){TASKS.splice(i,1);break}}
+    if(mapSel==="t_"+id)mapSel=null;editId=null;procChanged();
+  }
+  function addDay(){if(LEN()>=60)return;PLEN=LEN()+1;mapSel="d"+PLEN;procChanged()}
+  function removeDay(d){
+    TASKS=TASKS.filter(function(x){return x.day!==d});
+    TASKS.forEach(function(x){if(x.day>d)x.day--});
+    PLEN=Math.max(1,LEN()-1);mapSel=null;procChanged();
+  }
+  function startScratch(){TASKS=[];PLEN=1;mapSel="d1";procChanged()}
+  function confirmBtn(label,armedLabel,fn,cls){
+    var b=h("button","btn sm danger"+(cls?" "+cls:""),label),armed=false,tm=null;b.type="button";
+    b.addEventListener("click",function(){
+      if(!armed){armed=true;b.textContent=armedLabel;b.classList.add("armed");tm=setTimeout(function(){armed=false;b.textContent=label;b.classList.remove("armed")},3500);return}
+      clearTimeout(tm);fn();
+    });
+    return b;
+  }
+  var editId=null;
+  function nbtn(lbl,c,fn){var b=h("button","btn sm"+(c?" "+c:""),lbl);b.type="button";b.addEventListener("click",fn);return b}
+  function nbar(){var b=h("div","nbar");for(var i=0;i<arguments.length;i++)if(arguments[i])b.appendChild(arguments[i]);return b}
+  function doneBtn(){return nbtn("Done","primary",function(){editId=null;renderDetail()})}
+  function resetBtn(label){
+    var at=PS.isBase(procNow());
+    var b=h("button","btn sm",justReset?"Reset done":(at?"No changes to reset":label));b.type="button";b.disabled=at;
+    b.title=at?"Edit a step, day or gate first. This puts everything back the way it started.":"Put everything back the way it started";
+    b.addEventListener("click",function(){editId=null;procReset()});return b;
+  }
+  var focusNew=false;
+  function focusName(){if(!focusNew)return;focusNew=false;var ni=document.getElementById("i_name");if(ni){try{ni.focus();ni.select()}catch(e){}}}
+
   function inspect(p,g){
     var box=h("div","insp"),id=mapSel;
     if(id.indexOf("t_")===0){
@@ -848,8 +953,9 @@ input.pct{width:64px;text-align:right}
         fld("Feeds which gate","i_feeds","select",t.feeds,function(v){t.feeds=GI.hasOwnProperty(v)?v:"plan";procChanged()},FEED_OPTS),
         fld("Done at "+p.n,"i_done","check",!!p.done[t.id],function(v){if(v)p.done[t.id]=true;else delete p.done[t.id];render()}));
       box.appendChild(grid);
-      var del=h("button","btn sm","Delete this step");del.type="button";del.addEventListener("click",function(){TASKS.splice(TASKS.indexOf(t),1);mapSel=null;procChanged()});
-      box.appendChild(add(h("div","insp-bar"),del));
+      var del=h("button","btn sm danger","Delete this step");del.type="button";del.addEventListener("click",function(){delStep(t.id)});
+      var more=h("button","btn sm","+ Add another step on day "+t.day);more.type="button";more.addEventListener("click",function(){addStep(t.day)});
+      box.appendChild(add(h("div","insp-bar"),more,del));
     }else if(id==="g1"||id==="g2"){
       var key=id==="g1"?"ready":"staff";
       box.appendChild(inspHead("Gate: "+g[Number(id.slice(1))].l,procReset));
@@ -861,9 +967,12 @@ input.pct{width:64px;text-align:right}
     }else if(id.charAt(0)==="d"){
       var d=Number(id.slice(1));
       box.appendChild(inspHead("Day "+d,procReset));
-      var ab=h("button","btn sm","Add a step on day "+d);ab.type="button";ab.addEventListener("click",function(){addStep(d)});
-      box.appendChild(add(h("div","insp-bar"),ab));
-      box.appendChild(h("p","muted small","Move a step to another day by picking the step and changing its day, or change the onboarding length above to stretch the whole plan."));
+      var ab=h("button","btn sm","+ Add a step on day "+d);ab.type="button";ab.addEventListener("click",function(){addStep(d)});
+      var bar=add(h("div","insp-bar"),ab);
+      if(LEN()>1){var n=TASKS.filter(function(x){return x.day===d}).length;
+        bar.appendChild(n?confirmBtn("Remove day "+d,"Click again to remove day "+d+" and its "+n+" step"+(n>1?"s":""),function(){removeDay(d)}):(function(){var b=h("button","btn sm danger","Remove day "+d);b.type="button";b.addEventListener("click",function(){removeDay(d)});return b})());}
+      box.appendChild(bar);
+      box.appendChild(h("p","muted small","Move a step to another day by picking it and changing its day. Removing a day moves every later step one day earlier."));
     }else if(id==="c"){
       box.appendChild(inspHead(p.n,procReset));
       box.appendChild(h("p","muted small","The process is shared by every property. Progress, documents and training are tracked per property."));
