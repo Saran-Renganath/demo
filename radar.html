@@ -172,6 +172,17 @@ input.pct{width:64px;text-align:right}
 .insp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;align-items:end}
 .insp .field input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent)}
 .insp-bar{display:flex;gap:8px;flex-wrap:wrap}
+
+.nwrap{display:flex;flex-direction:column}
+.nwrap.open>.neuron,.nwrap.open>.pnode,.nwrap.open>.gnode{border-bottom-left-radius:0;border-bottom-right-radius:0}
+.npanel{display:flex;flex-direction:column;gap:8px;padding:9px;border:1px solid var(--accent);border-top:0;border-radius:0 0 8px 8px;background:var(--surface)}
+.lane>.npanel,.nwrap>.pm-verdict+.npanel{border-top:1px solid var(--accent);border-radius:8px;margin-top:2px}
+.npanel .field{font-size:12px}
+.npanel .field input,.npanel .field select{width:100%;padding:6px 8px;font-size:13px}
+.npanel .field input[type=checkbox]{width:18px;height:18px}
+.nbar{display:flex;flex-wrap:wrap;gap:6px}
+.nnote{font-size:12px;color:var(--muted);margin:0}
+.btn.sm.primary{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
 </style>
 </head>
 <body>
@@ -292,7 +303,34 @@ input.pct{width:64px;text-align:right}
   var PS=ProcStore("radar",DEF);
   TH=sanProc(PS.load()).th;
   function procChanged(){PS.save(procNow());render()}
-  var justReset=false;
+  var justReset=false,editId=null;
+  function nbtn(lbl,c,fn){var b=h("button","btn sm"+(c?" "+c:""),lbl);b.type="button";b.addEventListener("click",fn);return b}
+  function nbar(){var b=h("div","nbar");for(var i=0;i<arguments.length;i++)if(arguments[i])b.appendChild(arguments[i]);return b}
+  function resetBtn(label){
+    var at=PS.isBase(procNow());
+    var b=h("button","btn sm",justReset?"Reset done":(at?"No changes to reset":label));b.type="button";b.disabled=at;
+    b.title=at?"Edit a rule first. This puts every rule back the way it started.":"Put every rule back the way it started";
+    b.addEventListener("click",function(){editId=null;procReset()});return b;
+  }
+  var RULES={rHigh:[["high","Cost as % of plan fee",0,1000]],rRen:[["highRen","Cost as % of plan fee",0,1000],["renDays","Renewal inside, days",0,730]],
+    rMed:[["med","Medium risk starts at %",0,1000]],rLow:[["med","Medium risk starts at %",0,1000]],pMerge:[["merge","Messages per bot reply",1,20]],pBatch:[["batch","Utility share of volume, %",0,100]]};
+  function radarPanel(id){
+    var box=h("div","npanel"),r=RULES[id];
+    if(r){
+      if(editId===id){
+        r.forEach(function(x){box.appendChild(fld(x[1],"i_"+x[0],"number",TH[x[0]],function(v){TH[x[0]]=Math.max(x[2],Math.min(x[3],v));procChanged()}))});
+        box.appendChild(nbar(nbtn("Done","primary",function(){editId=null;render()})));
+      }else{
+        box.appendChild(nbar(nbtn("Edit rule","",function(){editId=id;render();var f=document.getElementById("i_"+r[0][0]);if(f){try{f.focus();f.select()}catch(e){}}})));
+        box.appendChild(h("p","nnote","Every account is scored again when you change it."));
+      }
+      return box;
+    }
+    if(id==="rate"){box.appendChild(h("p","nnote","Change market rates in Rate assumptions."));return box}
+    if(["svc","util","fee","ren","bub"].indexOf(id)>=0){box.appendChild(h("p","nnote","From the account's data. Change it with Try with your data."));return box}
+    if(id==="pCall"||id==="pNote"){box.appendChild(h("p","nnote","Fallback plays when neither volume fix fits. High risk gets a call, the rest get a note."));return box}
+    return null;
+  }
   function procReset(){TH=sanProc(PS.reset()).th;justReset=true;render();justReset=false;setTimeout(function(){render()},1600)}
   function h(t,c,x){return el(t,c,x)}
   function add(p){for(var i=1;i<arguments.length;i++)if(arguments[i])p.appendChild(arguments[i]);return p}
@@ -346,7 +384,7 @@ input.pct{width:64px;text-align:right}
     };
   }
   var brainDraw=null;
-  function Brain(root,model,selId,onSelect){
+  function Brain(root,model,selId,onSelect,panelFn){
     var E=function(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
     var NS="http://www.w3.org/2000/svg";
     root.textContent="";
@@ -372,7 +410,10 @@ input.pct{width:64px;text-align:right}
         b.appendChild(E("span","nl",n.label));if(n.sub)b.appendChild(E("span","ns",n.sub));
         b.setAttribute("aria-pressed",n.id===selId?"true":"false");
         b.addEventListener("click",function(){onSelect(n.id)});
-        els[n.id]=b;col.appendChild(b);
+        els[n.id]=b;
+        var w=E("div","nwrap"+(n.id===selId?" open":""));w.appendChild(b);
+        if(n.id===selId&&panelFn){var pe=panelFn(n.id);if(pe)w.appendChild(pe)}
+        col.appendChild(w);
       });
       if(L.add){var ab=E("button","neuron add",L.add.label);ab.type="button";ab.addEventListener("click",L.add.fn);col.appendChild(ab)}
       wrap.appendChild(col);
@@ -622,7 +663,7 @@ input.pct{width:64px;text-align:right}
 
   function renderBrain(x){
     var P=$("brainPanel");P.textContent="";
-    var hd=add(h("div"),h("h2",null,"How the radar decides"),h("p","muted small","Signals on the left, the decision on the right. The lit path is the reasoning for the selected account. Pick a rule to change its threshold."));
+    var hd=add(h("div","row-between"),add(h("div"),h("h2",null,"How the radar decides"),h("p","muted small","Signals on the left, the decision on the right. The lit path is the reasoning for the selected account. Click any rule for its options.")),resetBtn("Reset the rules"));
     P.appendChild(hd);
     if(!x){P.appendChild(h("p","muted","Pick an account to see its reasoning."));brainDraw=null;return}
     var a=x.a,c=x.c,RISK={rHigh:"high",rRen:"high",rMed:"medium",rLow:"low"},PLAYS={merge:"pMerge",batch:"pBatch",call:"pCall",note:"pNote"};
@@ -659,18 +700,7 @@ input.pct{width:64px;text-align:right}
     var ids={};model.layers.forEach(function(Ly){Ly.nodes.forEach(function(n){ids[n.id]=true})});
     if(!ids[mapSel])mapSel="out";
     var holder=h("div","brain-scroll");P.appendChild(holder);
-    brainDraw=Brain(holder,model,mapSel,function(id){mapSel=id;render()});
-    var box=h("div","insp"),grid=h("div","insp-grid");
-    function th(label,key,lo,hi){return fld(label,"i_"+key,"number",TH[key],function(v){TH[key]=Math.max(lo,Math.min(hi,v));procChanged()})}
-    if(mapSel==="rHigh"){box.appendChild(inspHead("Rule: high risk on cost alone",procReset));grid.appendChild(th("Cost as a percent of plan fee","high",0,1000));box.appendChild(grid)}
-    else if(mapSel==="rRen"){box.appendChild(inspHead("Rule: high risk near renewal",procReset));add(grid,th("Cost as a percent of plan fee","highRen",0,1000),th("Renewal inside this many days","renDays",0,730));box.appendChild(grid)}
-    else if(mapSel==="rMed"||mapSel==="rLow"){box.appendChild(inspHead("Rule: where medium risk starts",procReset));grid.appendChild(th("Cost as a percent of plan fee","med",0,1000));box.appendChild(grid)}
-    else if(mapSel==="pMerge"){box.appendChild(inspHead("Rule: when to merge bot replies",procReset));grid.appendChild(th("Messages per bot reply","merge",1,20));box.appendChild(grid)}
-    else if(mapSel==="pBatch"){box.appendChild(inspHead("Rule: when to batch status updates",procReset));grid.appendChild(th("Utility share of volume, percent","batch",0,100));box.appendChild(grid)}
-    else if(mapSel==="out"){box.appendChild(inspHead("Decision for "+a.n,procReset));box.appendChild(h("p","muted small","The lit path is everything that led to this call. Pick any rule on the map to change its threshold, and every account is scored again."))}
-    else if(mapSel==="pCall"||mapSel==="pNote"){box.appendChild(inspHead("Fallback plays",procReset));box.appendChild(h("p","muted small","These apply when neither volume fix fits. High risk gets a call, everything else gets a note."))}
-    else{box.appendChild(inspHead("Signal",procReset));box.appendChild(h("p","muted small","This comes from the account's data. Change it with Try with your data, or the market rate in the rate assumptions."))}
-    P.appendChild(box);
+    brainDraw=Brain(holder,model,mapSel,function(id){if(id!==mapSel)editId=null;mapSel=id;render()},radarPanel);
   }
   function renderDetail(x){
     var d=$("detail");d.textContent="";

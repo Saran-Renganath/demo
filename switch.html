@@ -271,6 +271,28 @@ input.pct{width:64px;text-align:right}
 .pm-dot{fill:var(--surface);stroke:var(--accent);stroke-width:2}
 @media (prefers-reduced-motion:reduce){.pm-wire{animation:none;stroke-dasharray:none}}
 @media (max-width:640px){.pm-grid{grid-template-columns:1fr;gap:16px}}
+
+.pwrap{position:relative}
+.pwrap .pnode{padding-right:26px}
+.pdel{position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:6px;border:1px solid transparent;background:transparent;color:var(--muted);font-size:15px;line-height:1;cursor:pointer;opacity:.55;display:flex;align-items:center;justify-content:center}
+.pdel:hover,.pdel:focus-visible{opacity:1;color:var(--crit);border-color:var(--crit);background:var(--crit-bg)}
+.lane-add{border:1px dashed var(--line);background:transparent;border-radius:8px;padding:5px 8px;font-size:12.5px;font-weight:600;color:var(--muted);cursor:pointer;text-align:left}
+.lane-add:hover{border-color:var(--accent);color:var(--ink)}
+.lane-empty{font-size:12px;color:var(--muted);padding:2px 4px}
+.btn.danger{color:var(--crit)}
+.btn.danger.armed{background:var(--crit);color:#fff;border-color:var(--crit)}
+.map-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+.nwrap{display:flex;flex-direction:column}
+.nwrap.open>.pnode,.nwrap.open>.gnode{border-bottom-left-radius:0;border-bottom-right-radius:0}
+.npanel{display:flex;flex-direction:column;gap:8px;padding:9px;border:1px solid var(--accent);border-top:0;border-radius:0 0 8px 8px;background:var(--surface)}
+.lane>.npanel,.nwrap>.pm-verdict+.npanel{border-top:1px solid var(--accent);border-radius:8px;margin-top:2px}
+.npanel .field{font-size:12px}
+.npanel .field input,.npanel .field select{width:100%;padding:6px 8px;font-size:13px}
+.npanel .field input[type=checkbox]{width:18px;height:18px}
+.nbar{display:flex;flex-wrap:wrap;gap:6px}
+.nnote{font-size:12px;color:var(--muted);margin:0}
+.btn.sm.primary{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
 </style>
 </head>
 <body>
@@ -364,7 +386,7 @@ input.pct{width:64px;text-align:right}
   var FEEDS={freeze:"quality",owners:"res",train:"staff",invites:"res",final:"trust",autopay:"auto","switch":"date",pay:"auto",stmt:"trust",review:"staff"};
   PLAN.forEach(function(s){s.feeds=FEEDS[s.id]||"quality"});
   var GI={quality:0,trust:1,res:2,auto:3,staff:4,date:5};
-  var FEED_OPTS=[["quality","Data quality gate"],["trust","Ledger gate"],["res","Resident portal gate"],["auto","Autopay gate"],["staff","Staff training gate"],["date","Switch date gate"]];
+  var FEED_OPTS=[["quality","Data quality"],["trust","Ledger reconciles"],["res","Resident portal"],["auto","Autopay re-enrolled"],["staff","Staff trained"],["date","Switch date outside rent week"]];
   var TH={quality:98,res:60,auto:70,staff:80};
   var DEF=JSON.stringify({plan:PLAN,th:TH});
   function sanProc(o){
@@ -510,21 +532,28 @@ input.pct{width:64px;text-align:right}
       }
     }
     function cls(base,id,state){return base+" "+(state||"")+(selId?(rel[id]?" rel":" fade"):"")}
+    function panel(id){if(id!==selId||!m.panel)return null;return m.panel(id)}
     var els={};
     function node(base,n){
+      var w=E("div","nwrap"+(n.id===selId?" open":""));
       var b=E("button",cls(base,n.id,n.state));b.type="button";
+      if(n.pill)b.appendChild(E("span","pill "+n.pill[0],n.pill[1]));
       b.appendChild(E("span","nl",n.label));if(n.sub)b.appendChild(E("span","nm",n.sub));
       b.setAttribute("aria-pressed",n.id===selId?"true":"false");
       b.addEventListener("click",function(){onSelect(n.id)});
-      els[n.id]=b;return b;
+      els[n.id]=b;w.appendChild(b);
+      var pe=panel(n.id);if(pe)w.appendChild(pe);
+      return w;
     }
     var pm=E("div","pm");
-    var v=m.verdict,vb=E("button","pm-verdict "+(v.state||""));vb.type="button";
+    var v=m.verdict,vw=E("div","nwrap"+(selId==="out"?" open":"")),vb=E("button","pm-verdict "+(v.state||""));vb.type="button";
     vb.setAttribute("aria-pressed",selId==="out"?"true":"false");
     var vl=E("div");vl.appendChild(E("div","pm-h",m.verdictTitle));vl.appendChild(E("div","pm-vl",v.label));
     vb.appendChild(vl);vb.appendChild(E("div","pm-vs",v.sub));
     vb.addEventListener("click",function(){onSelect("out")});
-    pm.appendChild(vb);
+    vw.appendChild(vb);var vp=panel("out");if(vp)vw.appendChild(vp);
+    pm.appendChild(vw);
+    if(m.tools)pm.appendChild(m.tools);
     var grid=E("div","pm-grid"),svg=document.createElementNS(NS,"svg");svg.setAttribute("class","pm-svg");svg.setAttribute("aria-hidden","true");
     var left=E("div","pm-left");left.appendChild(E("div","pm-h",m.lanesTitle));
     var lanes=E("div","pm-lanes");
@@ -536,17 +565,19 @@ input.pct{width:64px;text-align:right}
       hd.appendChild(top);hd.appendChild(E("span","nm",l.sub));
       hd.addEventListener("click",function(){onSelect(l.id)});
       lane.appendChild(hd);
+      var lp=panel(l.id);if(lp)lane.appendChild(lp);
       var bar=E("div","lane-bar"),fill=E("b");fill.style.width=(l.steps.length?Math.round(100*l.steps.filter(function(s){return s.state==="ok"}).length/l.steps.length):0)+"%";bar.appendChild(fill);lane.appendChild(bar);
       l.steps.forEach(function(s){lane.appendChild(node("pnode",s))});
+      if(!l.steps.length)lane.appendChild(E("div","lane-empty","No steps yet"));
+      if(l.addFn){var la=E("button","lane-add","+ Add a step");la.type="button";la.addEventListener("click",l.addFn);lane.appendChild(la)}
       lanes.appendChild(lane);
     });
     if(m.add){var ab=E("button","lane add",m.add.label);ab.type="button";ab.addEventListener("click",m.add.fn);lanes.appendChild(ab)}
     left.appendChild(lanes);
     var right=E("div","pm-right");right.appendChild(E("div","pm-h",m.gatesTitle));
     m.gates.forEach(function(g){
-      var b=node("gnode",g);
-      var pill=E("span","pill "+(g.state==="ok"?"low":"high"),g.state==="ok"?"Pass":"Open");b.insertBefore(pill,b.firstChild);
-      right.appendChild(b);
+      g.pill=[g.state==="ok"?"low":"high",g.state==="ok"?"Pass":"Open"];
+      right.appendChild(node("gnode",g));
     });
     grid.appendChild(left);grid.appendChild(right);grid.appendChild(svg);
     pm.appendChild(grid);root.appendChild(pm);
@@ -820,13 +851,13 @@ input.pct{width:64px;text-align:right}
     var PH=[["pre","Before the switch",function(s){return s.off<0}],["sw","Switch Day",function(s){return s.off===0}],["post","After the switch",function(s){return s.off>0}]];
     var lanes=[];
     PH.forEach(function(ph){
-      var ss=sorted.filter(ph[2]);if(!ss.length)return;
+      var ss=sorted.filter(ph[2]);var addOff=ph[0]==="pre"?-1:(ph[0]==="sw"?0:1);
       var dn=ss.filter(function(s){return m.plan[s.id]}).length,late=ss.some(function(s){return m.stage>=4&&s.off<0&&!m.plan[s.id]});
       var now=(ph[0]==="pre"&&m.stage<4)||(ph[0]==="sw"&&m.stage===4)||(ph[0]==="post"&&m.stage>=5);
-      lanes.push({id:"ph_"+ph[0],label:ph[1],tag:now?"Now":"",today:now,sub:dn+" of "+ss.length+" done",state:late?"late":(dn===ss.length?"ok":""),
+      lanes.push({id:"ph_"+ph[0],label:ph[1],tag:now?"Now":"",today:now,sub:ss.length?dn+" of "+ss.length+" done":"No steps yet",state:late?"late":(ss.length&&dn===ss.length?"ok":""),addFn:function(){addStep(addOff)},
         steps:ss.map(function(s){
           var lt=m.stage>=4&&s.off<0&&!m.plan[s.id];
-          return{id:"s_"+s.id,label:s.t,sub:offLabel(s.off)+", "+s.o+(m.plan[s.id]?", done":(lt?", overdue":"")),state:m.plan[s.id]?"ok":(lt?"late":""),gate:"g"+GI[s.feeds]};
+          return{id:"s_"+s.id,label:s.t,sub:offLabel(s.off)+", "+s.o+(m.plan[s.id]?", done":(lt?", overdue":"")),state:m.plan[s.id]?"ok":(lt?"late":""),gate:"g"+GI[s.feeds],delFn:function(){delStep(s.id)}};
         })});
     });
     var model={
@@ -834,21 +865,87 @@ input.pct{width:64px;text-align:right}
       verdict:{label:open===0?"Go":"No-go for now",sub:"Switch Day on the "+ord(m.switchDay)+". "+open+" of "+g.length+" gates open.",state:open===0?"ok":"late"},
       lanesTitle:"Cutover plan",
       lanes:lanes,
-      add:{label:"Add a step",fn:function(){addStep(-1)}},
+      add:null,
       gatesTitle:"Gates",
       gates:g.map(function(x,i){return{id:"g"+i,label:x.l,sub:x.d,state:x.ok?"ok":"late"}})
     };
     var ids={out:true};lanes.forEach(function(l){ids[l.id]=true;l.steps.forEach(function(s){ids[s.id]=true})});model.gates.forEach(function(x){ids[x.id]=true});
     if(!mapSel||!ids[mapSel]){var fo=g.map(function(x,i){return x.ok?null:"g"+i}).filter(Boolean)[0];mapSel=fo||"out"}
-    box.appendChild(h("p","hint","Each card is a phase of the move, and the gates sit on the right. Pick a step to see which gate it unlocks, a gate to see every step behind it, or the call to see what is holding it. Edit whatever you pick underneath."));
+    var tools=h("div","map-tools");tools.appendChild(confirmBtn("Start from scratch","Click again to clear every step",startScratch));
+    tools.appendChild(resetBtn("Reset the process"));
+    box.appendChild(tools);
+    box.appendChild(h("p","hint","Each card is a phase of the move, and the gates sit on the right. Click any step, phase or gate for its options. The line shows which gate a step unlocks."));
     var holder=h("div");box.appendChild(holder);
-    brainDraw=PMap(holder,model,mapSel,function(id){mapSel=id;renderDetail()});
-    box.appendChild(inspect(m,g));
+    model.panel=function(id){return nodePanel(m,g,id)};
+    brainDraw=PMap(holder,model,mapSel,function(id){if(id!==mapSel)editId=null;mapSel=id;renderDetail()});
+    focusName();
+  }
+  function nodePanel(m,g,id){
+    var box=h("div","npanel"),TK={g0:"quality",g2:"res",g3:"auto",g4:"staff"};
+    if(id.indexOf("s_")===0){
+      var s=PLAN.filter(function(x){return "s_"+x.id===id})[0];if(!s)return null;
+      if(editId===id){
+        add(box,
+          fld("Step name","i_name","text",s.t,function(v){s.t=v.trim().slice(0,90)||"Untitled step";procChanged()}),
+          fld("Owner","i_owner","text",s.o,function(v){s.o=v.trim().slice(0,24)||"CS";procChanged()}),
+          fld("Days from Switch Day (minus is before)","i_off","number",s.off,function(v){s.off=clampN(v,-90,120);procChanged()}),
+          fld("Unlocks gate","i_feeds","select",s.feeds,function(v){s.feeds=GI.hasOwnProperty(v)?v:"quality";procChanged()},FEED_OPTS),
+          nbar(doneBtn(),nbtn("Delete","danger",function(){delStep(s.id)})));
+      }else{
+        box.appendChild(nbar(
+          nbtn("Edit","",function(){editId=id;focusNew=true;renderDetail()}),
+          nbtn("Delete","danger",function(){delStep(s.id)}),
+          nbtn(m.plan[s.id]?"Mark not done":"Mark done","",function(){if(m.plan[s.id])delete m.plan[s.id];else m.plan[s.id]=true;render()})));
+      }
+      return box;
+    }
+    if(TK[id]){
+      var key=TK[id];
+      if(editId===id)add(box,fld("Threshold to pass, %","i_th","number",TH[key],function(v){TH[key]=clampN(v,0,100);procChanged()}),nbar(doneBtn()));
+      else box.appendChild(nbar(nbtn("Edit threshold","",function(){editId=id;renderDetail()})));
+      box.appendChild(h("p","nnote","The figure behind this gate is on the data checks and adoption tabs."));
+      return box;
+    }
+    if(id.charAt(0)==="g"){box.appendChild(h("p","nnote",id==="g1"?"The ledger variance is set on the data checks tab. It has to be zero.":"The switch date is set on the cutover plan tab, with the rent week guard."));return box}
+    if(id.indexOf("ph_")===0){
+      var off=id==="ph_pre"?-1:(id==="ph_sw"?0:1);
+      box.appendChild(nbar(nbtn("+ Add a step","",function(){addStep(off)})));
+      box.appendChild(h("p","nnote","Move a step between phases with its Edit option, by changing its days from Switch Day."));
+      return box;
+    }
+    if(id==="out"){box.appendChild(h("p","nnote","Every gate has to pass before Switch Day is a go. The open gates and the unfinished steps behind them are highlighted."));return box}
+    return null;
   }
   function addStep(off){
     var id="x"+Date.now().toString(36);
-    PLAN.push({id:id,off:clampN(off,-90,120),t:"New step",o:"CS",feeds:"quality"});mapSel="s_"+id;procChanged();
+    PLAN.push({id:id,off:clampN(off,-90,120),t:"New step",o:"CS",feeds:"quality"});mapSel="s_"+id;editId="s_"+id;focusNew=true;procChanged();
   }
+  function delStep(id){
+    for(var i=0;i<PLAN.length;i++){if(PLAN[i].id===id){PLAN.splice(i,1);break}}
+    if(mapSel==="s_"+id)mapSel=null;editId=null;procChanged();
+  }
+  function startScratch(){PLAN=[];mapSel="ph_pre";procChanged()}
+  function confirmBtn(label,armedLabel,fn,cls){
+    var b=h("button","btn sm danger"+(cls?" "+cls:""),label),armed=false,tm=null;b.type="button";
+    b.addEventListener("click",function(){
+      if(!armed){armed=true;b.textContent=armedLabel;b.classList.add("armed");tm=setTimeout(function(){armed=false;b.textContent=label;b.classList.remove("armed")},3500);return}
+      clearTimeout(tm);fn();
+    });
+    return b;
+  }
+  var editId=null;
+  function nbtn(lbl,c,fn){var b=h("button","btn sm"+(c?" "+c:""),lbl);b.type="button";b.addEventListener("click",fn);return b}
+  function nbar(){var b=h("div","nbar");for(var i=0;i<arguments.length;i++)if(arguments[i])b.appendChild(arguments[i]);return b}
+  function doneBtn(){return nbtn("Done","primary",function(){editId=null;renderDetail()})}
+  function resetBtn(label){
+    var at=PS.isBase(procNow());
+    var b=h("button","btn sm",justReset?"Reset done":(at?"No changes to reset":label));b.type="button";b.disabled=at;
+    b.title=at?"Edit a step, day or gate first. This puts everything back the way it started.":"Put everything back the way it started";
+    b.addEventListener("click",function(){editId=null;procReset()});return b;
+  }
+  var focusNew=false;
+  function focusName(){if(!focusNew)return;focusNew=false;var ni=document.getElementById("i_name");if(ni){try{ni.focus();ni.select()}catch(e){}}}
+
   function inspect(m,g){
     var box=h("div","insp"),id=mapSel,TK={g0:"quality",g2:"res",g3:"auto",g4:"staff"};
     if(id.indexOf("s_")===0){
@@ -862,7 +959,7 @@ input.pct{width:64px;text-align:right}
         fld("Feeds which gate","i_feeds","select",s.feeds,function(v){s.feeds=GI.hasOwnProperty(v)?v:"quality";procChanged()},FEED_OPTS),
         fld("Done at "+m.n,"i_done","check",!!m.plan[s.id],function(v){if(v)m.plan[s.id]=true;else delete m.plan[s.id];render()}));
       box.appendChild(grid);
-      var del=h("button","btn sm","Delete this step");del.type="button";del.addEventListener("click",function(){PLAN.splice(PLAN.indexOf(s),1);mapSel=null;procChanged()});
+      var del=h("button","btn sm danger","Delete this step");del.type="button";del.addEventListener("click",function(){delStep(s.id)});
       box.appendChild(add(h("div","insp-bar"),del));
     }else if(TK[id]){
       var key=TK[id];
