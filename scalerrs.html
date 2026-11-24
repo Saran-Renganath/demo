@@ -564,6 +564,14 @@ ol.steps .when{color:var(--pop)}
 #modeTag::before{background:#EF233C}
 .foot-note{border-top:3px solid #EF233C;padding-top:14px;max-width:none}
 /* Interactive layer (Nov 24) */
+.main{align-items:stretch}
+.main>.panel:first-child{display:flex;flex-direction:column}
+.main>.panel:first-child .scroll{flex:1}
+.main>.detail{align-self:start;position:sticky;top:92px;max-height:calc(100vh - 112px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+.detail .draft{max-height:220px;overflow-y:auto}
+.main>.detail{-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 44px),transparent);mask-image:linear-gradient(to bottom,#000 calc(100% - 44px),transparent);padding-bottom:44px}
+.main>.detail.at-end{-webkit-mask-image:none;mask-image:none}
+@media (max-width:1100px){.main>.detail{position:static;max-height:none;overflow:visible}}
 .bar{min-width:74px;gap:6px}.bar span{width:38px}
 .main table th,.main table td{padding-left:7px;padding-right:7px}
 .main table th{font-size:11px}
@@ -629,6 +637,21 @@ ol.steps li.chk span:not(.when):not(.box){padding-right:26px}
 .worth-foot{margin:14px 0 0;font-size:12.5px;color:#8E959E}
 @media (max-width:820px){.worth{grid-template-columns:1fr}.rr-search{max-width:none}}
 @media (prefers-reduced-motion:reduce){.kpi,.rr-toast,.prog i b{transition:none}tr.flash td{animation:none}}
+/* Hero v3 (Nov 24): centred, stacked. Text first, a smaller pull-down cue under it. */
+.top.hero{display:grid;grid-template-columns:1fr;justify-items:center;text-align:center;gap:30px;min-height:0;padding:44px 0 30px}
+.top.hero .hero-rule{display:none}
+.top.hero .hero-copy{order:1;align-items:center;max-width:900px;width:100%}
+.top.hero .hero-art{order:2;padding:0}
+.top.hero .co-line{justify-content:center}
+.top.hero h1{font-size:clamp(56px,6.4vw,104px)}
+.top.hero .hero-cols{align-items:center;margin-top:22px}
+.top.hero .lede{max-width:62ch;font-size:clamp(17px,1.3vw,20px);text-align:center}
+.top.hero .hero-side{max-width:62ch;text-align:center}
+.top.hero .hero-toggle{width:84px;height:176px;margin:0 0 14px;--travel:92px;--nudge:7px}
+.top.hero .hero-knob{width:66px;height:66px;margin-left:-33px;top:9px}
+.top.hero .hero-knob svg{width:26px;height:26px}
+.top.hero .hero-hint{justify-content:center}
+@media (max-width:820px){.top.hero{padding:24px 0 20px;gap:22px}.top.hero h1{font-size:44px}.top.hero .lede{font-size:16.5px}}
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 </head>
@@ -1579,6 +1602,8 @@ ol.steps li.chk span:not(.when):not(.box){padding-right:26px}
   var last=[];
   if(wS){wS.addEventListener("input",function(){worth(last)});wM.addEventListener("input",function(){worth(last)})}
   window.__rrAfter=function(list,cur){last=list;detailExtras(cur);["kHigh","kMrr","kNew","kWeek"].forEach(countUp);worth(list)};
+  var dt=$("detail");function endChk(){if(dt)dt.classList.toggle("at-end",dt.scrollHeight-dt.scrollTop-dt.clientHeight<6)}if(dt){dt.addEventListener("scroll",endChk,{passive:true});window.addEventListener("resize",endChk)}
+  var _a=window.__rrAfter;window.__rrAfter=function(l,c){_a(l,c);setTimeout(endChk,0)};
   RR.render();
 })();
 </script>
